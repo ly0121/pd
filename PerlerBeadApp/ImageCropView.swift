@@ -10,17 +10,21 @@ struct ImageCropView: View {
 
     @State private var offset: CGSize = .zero
     @State private var dragStart: CGSize = .zero
+    @State private var zoomScale: CGFloat = 1.0
+    @State private var zoomStart: CGFloat = 1.0
 
     private let cropSize: CGFloat = 320
+    private let minZoom: CGFloat = 0.5
+    private let maxZoom: CGFloat = 4.0
 
     var body: some View {
         VStack(spacing: 24) {
-            Text("拖动调整取景范围")
+            Text("双指缩放，拖动调整取景范围")
                 .font(.system(size: 15))
                 .foregroundStyle(.secondary)
 
             GeometryReader { geometry in
-                let fillSize = aspectFillSize(imageSize: sourceImage.size, boundingSize: CGSize(width: cropSize, height: cropSize))
+                let fillSize = scaledFillSize()
                 ZStack {
                     Color.black
                     Image(uiImage: sourceImage)
@@ -36,16 +40,25 @@ struct ImageCropView: View {
                 )
                 .position(x: geometry.size.width / 2, y: cropSize / 2)
                 .gesture(
-                    DragGesture()
-                        .onChanged { value in
-                            offset = CGSize(
-                                width: dragStart.width + value.translation.width,
-                                height: dragStart.height + value.translation.height
-                            )
-                        }
-                        .onEnded { _ in
-                            dragStart = offset
-                        }
+                    SimultaneousGesture(
+                        DragGesture()
+                            .onChanged { value in
+                                offset = CGSize(
+                                    width: dragStart.width + value.translation.width,
+                                    height: dragStart.height + value.translation.height
+                                )
+                            }
+                            .onEnded { _ in
+                                dragStart = offset
+                            },
+                        MagnificationGesture()
+                            .onChanged { value in
+                                zoomScale = min(maxZoom, max(minZoom, zoomStart * value))
+                            }
+                            .onEnded { _ in
+                                zoomStart = zoomScale
+                            }
+                    )
                 )
             }
             .frame(height: cropSize)
@@ -70,11 +83,19 @@ struct ImageCropView: View {
         return CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
     }
 
+    /// The base aspect-fill size (fills the crop box with no gaps) multiplied by the user's
+    /// pinch zoom factor. `zoomScale` is a multiplier on top of this base, not an absolute scale,
+    /// so 1.0 always means "exactly filling the crop box" regardless of the source image's shape.
+    private func scaledFillSize() -> CGSize {
+        let baseFillSize = aspectFillSize(imageSize: sourceImage.size, boundingSize: CGSize(width: cropSize, height: cropSize))
+        return CGSize(width: baseFillSize.width * zoomScale, height: baseFillSize.height * zoomScale)
+    }
+
     /// Renders the currently visible square crop region to a new UIImage at the source image's
     /// native resolution (scaled proportionally), so downstream processing works from full detail
     /// rather than the small on-screen preview size.
     private func renderCroppedImage() -> UIImage {
-        let fillSize = aspectFillSize(imageSize: sourceImage.size, boundingSize: CGSize(width: cropSize, height: cropSize))
+        let fillSize = scaledFillSize()
         let scaleToNative = sourceImage.size.width / fillSize.width
 
         // Everything up to here is in "points" (UIImage.size is points, not pixels), but

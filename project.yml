@@ -26,6 +26,9 @@ targets:
         INFOPLIST_KEY_NSCameraUsageDescription: "用于拍照生成拼豆图纸"
         GENERATE_INFOPLIST_FILE: "YES"
         TARGETED_DEVICE_FAMILY: "1"
+        DEVELOPMENT_TEAM: "46GQ33TNHQ"
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "Apple Development"
     dependencies:
       - package: BeadCore
         product: BeadCore
