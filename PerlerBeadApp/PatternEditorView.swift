@@ -20,18 +20,36 @@ struct PatternEditorView: View {
     @State private var loadError: String?
     @State private var showingExport = false
     @State private var saver: DebouncedGridSaver?
+    @State private var showingSizePicker = false
+    @State private var regenerateSize: Int = 0
+    @State private var pendingRegenerateSize: Int?
+    @State private var isRegenerating = false
 
     var body: some View {
         VStack(spacing: 0) {
             if let grid {
-                BeadGridCanvas(
-                    grid: grid,
-                    highlightedColorCode: highlightedColorCode,
-                    onCellTouched: { col, row, isStrokeStart in
-                        handleCellInteraction(col: col, row: row, isStrokeStart: isStrokeStart)
+                ZStack {
+                    BeadGridCanvas(
+                        grid: grid,
+                        highlightedColorCode: highlightedColorCode,
+                        onCellTouched: { col, row, isStrokeStart in
+                            handleCellInteraction(col: col, row: row, isStrokeStart: isStrokeStart)
+                        }
+                    )
+                    .background(Color.white)
+
+                    if isRegenerating {
+                        Color.black.opacity(0.15)
+                        VStack(spacing: 16) {
+                            ProgressView()
+                            Text("正在重新生成图纸…")
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(24)
+                        .background(AppTheme.cardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous))
                     }
-                )
-                .background(Color.white)
+                }
 
                 colorPalette(for: grid)
                 toolbar
@@ -46,14 +64,45 @@ struct PatternEditorView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("导出") { showingExport = true }
-                    .disabled(grid == nil)
+                    .disabled(grid == nil || isRegenerating)
                     .accessibilityIdentifier("exportButton")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showingSizePicker = true
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                }
+                .disabled(grid == nil || isRegenerating)
+                .accessibilityIdentifier("regenerateButton")
             }
         }
         .sheet(isPresented: $showingExport) {
             if let grid {
                 ExportView(grid: grid, projectName: project.name)
             }
+        }
+        .sheet(isPresented: $showingSizePicker) {
+            GridSizePickerSheet(selectedSize: $regenerateSize, onSelect: { pendingRegenerateSize = regenerateSize })
+        }
+        .confirmationDialog(
+            "用 \(pendingRegenerateSize ?? regenerateSize)×\(pendingRegenerateSize ?? regenerateSize) 重新生成图纸？",
+            isPresented: Binding(
+                get: { pendingRegenerateSize != nil },
+                set: { if !$0 { pendingRegenerateSize = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("重新生成", role: .destructive) {
+                if let size = pendingRegenerateSize {
+                    pendingRegenerateSize = nil
+                    regenerate(columns: size)
+                }
+            }
+            .accessibilityIdentifier("confirmRegenerateButton")
+            Button("取消", role: .cancel) { pendingRegenerateSize = nil }
+        } message: {
+            Text("当前手动上色的内容将被替换，且无法撤销。")
         }
         .task {
             loadGrid()
@@ -66,10 +115,47 @@ struct PatternEditorView: View {
     private func loadGrid() {
         let repository = BeadProjectRepository(context: modelContext)
         saver = DebouncedGridSaver(repository: repository, project: project)
+        regenerateSize = project.columns
         do {
             grid = try repository.decodeGrid(for: project, palette: MardPalette.standard221)
         } catch {
             loadError = "图纸数据读取失败：\(error.localizedDescription)"
+        }
+    }
+
+    /// Re-runs the full generation pipeline against the project's saved original photo at a new
+    /// grid size, replacing the current grid (including any manual painting) once it completes.
+    /// The caller is responsible for confirming with the user first, since this is destructive.
+    private func regenerate(columns: Int) {
+        guard let sourceImage = UIImage(data: project.originalImageData) else { return }
+        isRegenerating = true
+
+        Task { @MainActor in
+            // The CPU-heavy generation work is offloaded to a detached task, which must not
+            // capture `project`/`modelContext` (SwiftData types aren't Sendable) — so this
+            // closure only takes and returns plain values, and all SwiftData access happens
+            // back on the MainActor below once it returns.
+            let newGrid = await Task.detached(priority: .userInitiated) { () -> BeadGrid? in
+                guard let downsampled = NewProjectFlowModel.downsample(sourceImage, targetColumns: columns),
+                      let cgImage = downsampled.cgImage
+                else { return nil }
+                let options = PatternGenerationOptions(columns: columns, rows: columns)
+                return PatternGenerator.generate(
+                    cgImage: cgImage,
+                    importanceProvider: VisionSaliencyImportanceMapProvider(),
+                    options: options
+                )
+            }.value
+
+            guard let newGrid else {
+                isRegenerating = false
+                return
+            }
+            let repository = BeadProjectRepository(context: modelContext)
+            try? repository.updateGrid(for: project, grid: newGrid, now: Date())
+            grid = newGrid
+            history = GridEditHistory()
+            isRegenerating = false
         }
     }
 
@@ -111,6 +197,9 @@ struct PatternEditorView: View {
                                 .overlay(
                                     Circle().stroke(selectedColor?.code == usage.color.code ? AppTheme.coral : .clear, lineWidth: 3)
                                 )
+                            Text(usage.color.code)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(AppTheme.textPrimary)
                             Text("\(usage.count)")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)

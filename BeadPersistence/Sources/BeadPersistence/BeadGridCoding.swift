@@ -32,6 +32,13 @@ public enum BeadGridCoding {
         var colors = [MardColor]()
         colors.reserveCapacity(expectedCount)
         for code in codeList {
+            // MardColor.empty ("EMPTY") marks a background-removed cell and is never a member of
+            // any real palette, so it's let through unconditionally rather than requiring every
+            // caller to remember to add it to whatever palette they pass in.
+            if code == MardColor.empty.code {
+                colors.append(.empty)
+                continue
+            }
             guard let color = paletteByCode[code] else {
                 throw BeadGridCodingError.unknownColorCode(code)
             }

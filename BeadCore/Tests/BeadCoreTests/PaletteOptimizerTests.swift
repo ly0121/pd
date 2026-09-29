@@ -74,4 +74,105 @@ struct PaletteOptimizerTests {
         #expect(result.cellPaletteColors.count == 64)
         #expect(result.segmentation.labels.count == 1024)
     }
+
+    @Test("a cell whose contourFraction clears the forcing threshold is assigned a dark palette color even though its own mean tone is light")
+    func contourForcingOverridesLightMean() {
+        // A light gray cell that would normally match a light palette color, but every pixel in
+        // it is flagged as a strong contour so the assignment should be forced dark instead.
+        let lightGray = LabColor(l: 80, a: 0, b: 0)
+        let image = PixelImage(width: 4, height: 4, pixels: [LabColor](repeating: lightGray, count: 16))
+        let importance = ImportanceMap.uniform(width: 4, height: 4)
+        let contourWeights = [Double](repeating: 1.0, count: 16)
+        let palette = [
+            MardColor(code: "LIGHT", hex: "E0E0E0"),
+            MardColor(code: "DARK", hex: "202020"),
+        ]
+
+        let result = PaletteOptimizer.optimize(
+            image: image, columns: 1, rows: 1, importance: importance, palette: palette,
+            contourWeights: contourWeights
+        )
+
+        #expect(result.cellPaletteColors.allSatisfy { $0.code == "DARK" })
+    }
+
+    @Test("a cell with no contour weight is unaffected by contour forcing and matches its natural class")
+    func noContourWeightLeavesNaturalAssignmentUnchanged() {
+        let lightGray = LabColor(l: 80, a: 0, b: 0)
+        let image = PixelImage(width: 4, height: 4, pixels: [LabColor](repeating: lightGray, count: 16))
+        let importance = ImportanceMap.uniform(width: 4, height: 4)
+        let contourWeights = [Double](repeating: 0.0, count: 16)
+        let palette = [
+            MardColor(code: "LIGHT", hex: "E0E0E0"),
+            MardColor(code: "DARK", hex: "202020"),
+        ]
+
+        let result = PaletteOptimizer.optimize(
+            image: image, columns: 1, rows: 1, importance: importance, palette: palette,
+            contourWeights: contourWeights
+        )
+
+        #expect(result.cellPaletteColors.allSatisfy { $0.code == "LIGHT" })
+    }
+
+    @Test("cellStats on the result exposes contourFraction matching the input contourWeights")
+    func resultExposesCellStatsWithContourFraction() {
+        let gray = LabColor(l: 50, a: 0, b: 0)
+        let image = PixelImage(width: 2, height: 2, pixels: [LabColor](repeating: gray, count: 4))
+        let importance = ImportanceMap.uniform(width: 2, height: 2)
+        let contourWeights = [0.1, 0.9, 0.5, 0.5] // mean 0.5
+        let palette = [MardColor(code: "GRAY", hex: "808080")]
+
+        let result = PaletteOptimizer.optimize(
+            image: image, columns: 1, rows: 1, importance: importance, palette: palette,
+            contourWeights: contourWeights
+        )
+
+        #expect(result.cellStats.count == 1)
+        #expect(abs(result.cellStats[0].contourFraction - 0.5) < 0.001)
+    }
+
+    @Test("a cell whose foregroundFraction falls below the background removal threshold is assigned MardColor.empty")
+    func backgroundRemovalAssignsEmptyBelowThreshold() {
+        let gray = LabColor(l: 50, a: 0, b: 0)
+        let image = PixelImage(width: 4, height: 4, pixels: [LabColor](repeating: gray, count: 16))
+        let importance = ImportanceMap.uniform(width: 4, height: 4)
+        let foregroundWeights = [Double](repeating: 0.1, count: 16) // well below default threshold 0.3
+        let palette = [MardColor(code: "GRAY", hex: "808080")]
+
+        let result = PaletteOptimizer.optimize(
+            image: image, columns: 1, rows: 1, importance: importance, palette: palette,
+            foregroundWeights: foregroundWeights
+        )
+
+        #expect(result.cellPaletteColors.allSatisfy { $0 == MardColor.empty })
+    }
+
+    @Test("a cell whose foregroundFraction is at or above the background removal threshold matches normally")
+    func foregroundCellMatchesNormallyAboveThreshold() {
+        let gray = LabColor(l: 50, a: 0, b: 0)
+        let image = PixelImage(width: 4, height: 4, pixels: [LabColor](repeating: gray, count: 16))
+        let importance = ImportanceMap.uniform(width: 4, height: 4)
+        let foregroundWeights = [Double](repeating: 0.9, count: 16)
+        let palette = [MardColor(code: "GRAY", hex: "808080")]
+
+        let result = PaletteOptimizer.optimize(
+            image: image, columns: 1, rows: 1, importance: importance, palette: palette,
+            foregroundWeights: foregroundWeights
+        )
+
+        #expect(result.cellPaletteColors.allSatisfy { $0.code == "GRAY" })
+    }
+
+    @Test("omitting foregroundWeights entirely leaves normal palette matching unaffected")
+    func omittingForegroundWeightsLeavesBehaviorUnchanged() {
+        let gray = LabColor(l: 50, a: 0, b: 0)
+        let image = PixelImage(width: 4, height: 4, pixels: [LabColor](repeating: gray, count: 16))
+        let importance = ImportanceMap.uniform(width: 4, height: 4)
+        let palette = [MardColor(code: "GRAY", hex: "808080")]
+
+        let result = PaletteOptimizer.optimize(image: image, columns: 1, rows: 1, importance: importance, palette: palette)
+
+        #expect(result.cellPaletteColors.allSatisfy { $0.code == "GRAY" })
+    }
 }

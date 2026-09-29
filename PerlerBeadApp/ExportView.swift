@@ -1,4 +1,5 @@
 import BeadCore
+import Photos
 import SwiftUI
 
 /// Renders a full export image: one cell per bead color with its MARD code printed inside, plus
@@ -45,6 +46,13 @@ enum PatternExportRenderer {
             for col in 0..<grid.columns {
                 let color = grid.color(col: col, row: row)
                 let rect = CGRect(x: origin.x + CGFloat(col) * cellSize, y: origin.y + CGFloat(row) * cellSize, width: cellSize, height: cellSize)
+                guard color != .empty else {
+                    // Punch a real transparent hole rather than leaving it painted white — the
+                    // canvas background was already filled white before this loop runs, so
+                    // skipping the fill alone would just leave a white square, not transparency.
+                    context.clear(rect)
+                    continue
+                }
                 UIColor(red: color.red, green: color.green, blue: color.blue, alpha: 1).setFill()
                 context.fill(rect)
                 UIColor.black.withAlphaComponent(0.15).setStroke()
@@ -160,7 +168,7 @@ struct ExportView: View {
     let projectName: String
     @Environment(\.dismiss) private var dismiss
     @State private var renderedImage: UIImage?
-    @State private var showingShareSheet = false
+    @State private var saveResultMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -182,28 +190,52 @@ struct ExportView: View {
                     Button("关闭") { dismiss() }
                 }
                 ToolbarItem(placement: .primaryAction) {
-                    Button("分享") { showingShareSheet = true }
+                    Button("保存到相册") { saveToPhotoLibrary() }
                         .disabled(renderedImage == nil)
-                }
-            }
-            .sheet(isPresented: $showingShareSheet) {
-                if let renderedImage {
-                    ShareSheet(items: [renderedImage])
                 }
             }
             .task {
                 renderedImage = PatternExportRenderer.render(grid)
             }
+            .alert(
+                "保存失败",
+                isPresented: Binding(
+                    get: { saveResultMessage != nil },
+                    set: { if !$0 { saveResultMessage = nil } }
+                ),
+                presenting: saveResultMessage
+            ) { _ in
+                Button("好") { saveResultMessage = nil }
+            } message: { message in
+                Text(message)
+            }
         }
     }
-}
 
-struct ShareSheet: UIViewControllerRepresentable {
-    let items: [Any]
+    /// Saves directly to the photo library with no confirmation prompt — the user explicitly
+    /// tapped a "保存到相册" button, so there's nothing left to confirm. Only surfaces UI when
+    /// something goes wrong (permission denied, write failure); silent success matches the
+    /// system Photos app's own save-from-share behavior.
+    private func saveToPhotoLibrary() {
+        guard let renderedImage else { return }
 
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            switch status {
+            case .authorized, .limited:
+                PHPhotoLibrary.shared().performChanges({
+                    PHAssetChangeRequest.creationRequestForAsset(from: renderedImage)
+                }) { success, error in
+                    if !success {
+                        Task { @MainActor in
+                            saveResultMessage = error?.localizedDescription ?? "无法保存图片，请稍后重试"
+                        }
+                    }
+                }
+            default:
+                Task { @MainActor in
+                    saveResultMessage = "没有相册访问权限，请在系统设置中开启"
+                }
+            }
+        }
     }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

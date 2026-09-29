@@ -67,11 +67,19 @@ struct GridSizePickerContent: View {
 /// grid size), as opposed to being one step inside NewProjectFlowView's own navigation flow.
 struct GridSizePickerSheet: View {
     @Binding var selectedSize: Int
+    /// Called right before the sheet dismisses itself, in addition to always dismissing — lets
+    /// callers react to the selection (e.g. trigger a confirmation dialog) without having to
+    /// reimplement the sheet's own dismiss chrome. Optional and defaults to nil so existing
+    /// call sites that just want "pick a size and close" keep working unchanged.
+    var onSelect: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            GridSizePickerContent(selectedSize: $selectedSize, onSelect: { dismiss() })
+            GridSizePickerContent(selectedSize: $selectedSize, onSelect: {
+                onSelect?()
+                dismiss()
+            })
                 .background(Color.white.ignoresSafeArea())
                 .navigationTitle("板子格数")
                 .navigationBarTitleDisplayMode(.inline)

@@ -5,6 +5,14 @@ public struct CellStats: Sendable, Equatable {
     public var centerX: Double
     public var centerY: Double
     public var pixelCount: Int
+    /// Mean contour weight (see `ContourDetector`) across this cell's assigned pixels, in [0, 1].
+    /// Zero when no `contourWeights` were supplied to `cellStats(...)`.
+    public var contourFraction: Double = 0
+    /// Mean foreground-probability weight (see `ForegroundMaskProvider`) across this cell's
+    /// assigned pixels, in [0, 1]. Zero when no `foregroundWeights` were supplied to
+    /// `cellStats(...)` — which also means "not applicable," not "definitely background," so
+    /// callers must gate on whether background removal was requested at all before acting on it.
+    public var foregroundFraction: Double = 0
 }
 
 public struct SegmentationResult: Sendable, Equatable {
@@ -40,13 +48,19 @@ public enum SuperpixelSegmenter {
 
     /// Computes importance-weighted mean color and centroid position per cell.
     /// Cells with zero assigned pixels keep `fallback` (or a zero-filled stat if no fallback given).
+    /// `contourWeights`/`foregroundWeights`, if supplied (one entry per pixel, matching
+    /// `image.pixels`' layout), also produce each cell's mean `contourFraction`/`foregroundFraction`
+    /// — omit either to leave that fraction at 0 and preserve prior behavior for callers that
+    /// don't care about it.
     public static func cellStats(
         image: PixelImage,
         columns: Int,
         rows: Int,
         importance: ImportanceMap,
         labels: [Int],
-        fallback: [CellStats]? = nil
+        fallback: [CellStats]? = nil,
+        contourWeights: [Double]? = nil,
+        foregroundWeights: [Double]? = nil
     ) -> [CellStats] {
         let cellCount = columns * rows
         var sumL = [Double](repeating: 0, count: cellCount)
@@ -56,6 +70,8 @@ public enum SuperpixelSegmenter {
         var sumY = [Double](repeating: 0, count: cellCount)
         var sumWeight = [Double](repeating: 0, count: cellCount)
         var pixelCount = [Int](repeating: 0, count: cellCount)
+        var sumContour = [Double](repeating: 0, count: cellCount)
+        var sumForeground = [Double](repeating: 0, count: cellCount)
 
         for y in 0..<image.height {
             for x in 0..<image.width {
@@ -70,6 +86,12 @@ public enum SuperpixelSegmenter {
                 sumY[cell] += weight * Double(y)
                 sumWeight[cell] += weight
                 pixelCount[cell] += 1
+                if let contourWeights {
+                    sumContour[cell] += contourWeights[idx]
+                }
+                if let foregroundWeights {
+                    sumForeground[cell] += foregroundWeights[idx]
+                }
             }
         }
 
@@ -77,11 +99,15 @@ public enum SuperpixelSegmenter {
         results.reserveCapacity(cellCount)
         for cell in 0..<cellCount {
             if sumWeight[cell] > 0 {
+                let contourFraction = pixelCount[cell] > 0 ? sumContour[cell] / Double(pixelCount[cell]) : 0
+                let foregroundFraction = pixelCount[cell] > 0 ? sumForeground[cell] / Double(pixelCount[cell]) : 0
                 results.append(CellStats(
                     color: LabColor(l: sumL[cell] / sumWeight[cell], a: sumA[cell] / sumWeight[cell], b: sumB[cell] / sumWeight[cell]),
                     centerX: sumX[cell] / sumWeight[cell],
                     centerY: sumY[cell] / sumWeight[cell],
-                    pixelCount: pixelCount[cell]
+                    pixelCount: pixelCount[cell],
+                    contourFraction: contourFraction,
+                    foregroundFraction: foregroundFraction
                 ))
             } else if let fallback, cell < fallback.count {
                 results.append(fallback[cell])

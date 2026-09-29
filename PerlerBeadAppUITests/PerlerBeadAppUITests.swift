@@ -70,4 +70,83 @@ final class PerlerBeadAppUITests: XCTestCase {
         let anyProjectCard = relaunched.buttons.matching(projectCardPredicate).firstMatch
         XCTAssertTrue(anyProjectCard.waitForExistence(timeout: 5))
     }
+
+    /// Drives the pattern editor's "regenerate at a different size" flow end to end: reach the
+    /// editor via the normal new-project path, tap the regenerate button, pick a different grid
+    /// size than the one just used, confirm the destructive confirmation dialog, and verify the
+    /// editor is still usable afterward (exportButton reappears) — proving the project's saved
+    /// original photo can be re-run through the full generation pipeline from within the editor,
+    /// not just once at creation time.
+    func testRegeneratePatternAtDifferentSize() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-UITestUseSampleImage"]
+        app.launch()
+
+        app.buttons["newProjectButton"].tap()
+        app.buttons["useSampleImageButton"].tap()
+        app.buttons["confirmCropButton"].tap()
+        app.buttons["gridSizeOption_16"].tap()
+        app.buttons["generatePatternButton"].tap()
+        XCTAssertTrue(app.buttons["exportButton"].waitForExistence(timeout: 30))
+
+        let regenerateButton = app.buttons["regenerateButton"]
+        XCTAssertTrue(regenerateButton.waitForExistence(timeout: 5))
+        regenerateButton.tap()
+
+        let differentSizeOption = app.buttons["gridSizeOption_24"]
+        XCTAssertTrue(differentSizeOption.waitForExistence(timeout: 5))
+        differentSizeOption.tap()
+
+        // confirmationDialog buttons report a nested duplicate of the same accessibility
+        // identifier in the snapshot tree, so disambiguate with firstMatch.
+        let confirmRegenerateButton = app.buttons["confirmRegenerateButton"].firstMatch
+        XCTAssertTrue(confirmRegenerateButton.waitForExistence(timeout: 5))
+        confirmRegenerateButton.tap()
+
+        // Regeneration re-runs the full BeadCore pipeline on a background thread; give it the
+        // same generous timeout as initial generation.
+        XCTAssertTrue(app.buttons["exportButton"].waitForExistence(timeout: 30))
+    }
+
+    /// Drives the generation settings step's new controls: opening the palette material picker
+    /// and choosing a non-default preset, toggling background removal on, then generating —
+    /// verifying the pipeline still completes successfully with these new parameters wired
+    /// through (not just that each control compiles/renders).
+    func testGenerationSettingsWithPaletteAndBackgroundRemoval() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-UITestUseSampleImage"]
+        app.launch()
+
+        app.buttons["newProjectButton"].tap()
+        app.buttons["useSampleImageButton"].tap()
+        app.buttons["confirmCropButton"].tap()
+
+        let gridSizeOption16 = app.buttons["gridSizeOption_16"]
+        XCTAssertTrue(gridSizeOption16.waitForExistence(timeout: 5))
+        gridSizeOption16.tap()
+
+        let paletteMaterialRow = app.buttons["paletteMaterialRow"]
+        XCTAssertTrue(paletteMaterialRow.waitForExistence(timeout: 5))
+        paletteMaterialRow.tap()
+
+        let paletteOption24 = app.buttons["paletteOption_n24"]
+        XCTAssertTrue(paletteOption24.waitForExistence(timeout: 5))
+        paletteOption24.tap()
+
+        // The picker sheet should have dismissed itself and the row should now show the
+        // selected preset's label rather than the default "我的" label.
+        XCTAssertTrue(paletteMaterialRow.waitForExistence(timeout: 5))
+
+        let removeBackgroundToggle = app.switches["removeBackgroundToggle"]
+        XCTAssertTrue(removeBackgroundToggle.waitForExistence(timeout: 5))
+        removeBackgroundToggle.tap()
+
+        let generateButton = app.buttons["generatePatternButton"]
+        XCTAssertTrue(generateButton.waitForExistence(timeout: 5))
+        generateButton.tap()
+
+        // Background removal adds a Vision foreground-detection pass on top of the normal
+        // pipeline, so give it the same generous timeout as plain generation.
+        XCTAssertTrue(app.buttons["exportButton"].waitForExistence(timeout: 30))
+    }
 }

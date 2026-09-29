@@ -50,4 +50,15 @@ struct BeadGridCodingTests {
 
         #expect(decoded == grid)
     }
+
+    @Test("decode passes through MardColor.empty codes without requiring them in the given palette")
+    func decodePassesThroughEmptyCodeWithoutPaletteMembership() throws {
+        let grid = BeadGrid(columns: 2, rows: 2, colors: [Self.red, .empty, .empty, Self.blue])
+        let encoded = BeadGridCoding.encode(grid)
+
+        // Note: the palette below deliberately does NOT include MardColor.empty.
+        let decoded = try BeadGridCoding.decode(encoded, columns: 2, rows: 2, palette: [Self.red, Self.blue])
+
+        #expect(decoded == grid)
+    }
 }

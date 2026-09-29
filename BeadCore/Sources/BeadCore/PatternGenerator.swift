@@ -23,32 +23,42 @@ public struct PatternGenerationOptions: Sendable {
 }
 
 public enum PatternGenerator {
-    /// Runs the full image -> bead grid pipeline: importance map, SLIC + palette joint
-    /// optimization, then isolated-noise cleanup.
+    /// Runs the full image -> bead grid pipeline: importance map, contour detection, SLIC +
+    /// palette joint optimization (forcing dark outlines per contour weight, and assigning
+    /// `MardColor.empty` for background per `foregroundWeights`), isolated-noise cleanup, then
+    /// gradient-order repair.
     public static func generate(
         image: PixelImage,
         importance: ImportanceMap,
-        options: PatternGenerationOptions
+        options: PatternGenerationOptions,
+        foregroundWeights: [Double]? = nil
     ) -> BeadGrid {
+        let contourWeights = ContourDetector.detect(image)
         let optimized = PaletteOptimizer.optimize(
             image: image, columns: options.columns, rows: options.rows,
             importance: importance, palette: options.palette,
-            iterations: options.iterations, compactness: options.compactness
+            iterations: options.iterations, compactness: options.compactness,
+            contourWeights: contourWeights, foregroundWeights: foregroundWeights
         )
         let grid = PaletteOptimizer.makeGrid(from: optimized)
-        return NoiseCleaner.clean(grid, maxIsolatedCount: options.maxIsolatedCount)
+        let cleaned = NoiseCleaner.clean(grid, maxIsolatedCount: options.maxIsolatedCount)
+        return GradientOrderEnforcer.enforce(cleaned, sourceStats: optimized.cellStats, palette: options.palette)
     }
 
     /// Convenience overload that reads pixels directly from a CGImage and generates the
-    /// importance map via the given provider.
+    /// importance map via the given provider. `foregroundMaskProvider` defaults to
+    /// `UniformForegroundMaskProvider` (always nil, i.e. no background removal) so existing
+    /// call sites that don't care about background removal are unaffected.
     public static func generate(
         cgImage: CGImage,
         importanceProvider: ImportanceMapProvider,
-        options: PatternGenerationOptions
+        options: PatternGenerationOptions,
+        foregroundMaskProvider: ForegroundMaskProvider = UniformForegroundMaskProvider()
     ) -> BeadGrid {
         let image = PixelImage(cgImage: cgImage)
         let importance = importanceProvider.importanceMap(for: cgImage)
-        return generate(image: image, importance: importance, options: options)
+        let foregroundWeights = foregroundMaskProvider.foregroundMask(for: cgImage)
+        return generate(image: image, importance: importance, options: options, foregroundWeights: foregroundWeights)
     }
 }
 

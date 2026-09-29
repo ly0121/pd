@@ -103,4 +103,79 @@ struct PatternGeneratorTests {
         #expect(grid.rows == 100)
         #expect(elapsedSeconds < 10.0)
     }
+
+    /// Fake provider standing in for a real Vision detection: marks the left half of the image
+    /// as background (weight 0) and the right half as foreground (weight 1), so the test can
+    /// assert on a known, deterministic split rather than depending on Vision's actual subject
+    /// detection succeeding on a synthetic image.
+    private struct HalfSplitForegroundMaskProvider: ForegroundMaskProvider {
+        func foregroundMask(for image: CGImage) -> [Double]? {
+            var weights = [Double](repeating: 0, count: image.width * image.height)
+            for y in 0..<image.height {
+                for x in 0..<image.width {
+                    weights[y * image.width + x] = x < image.width / 2 ? 0.0 : 1.0
+                }
+            }
+            return weights
+        }
+    }
+
+    @Test("generate assigns MardColor.empty to cells in the background half when given a foreground mask provider")
+    func generateAppliesBackgroundRemoval() {
+        let width = 40, height = 40
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let context = CGContext(
+            data: nil, width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        context.setFillColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let cgImage = context.makeImage()!
+
+        let options = PatternGenerationOptions(columns: 16, rows: 8)
+        let grid = PatternGenerator.generate(
+            cgImage: cgImage,
+            importanceProvider: UniformImportanceMapProvider(),
+            options: options,
+            foregroundMaskProvider: HalfSplitForegroundMaskProvider()
+        )
+
+        // Only check the outer quarter of columns on each side, well clear of the seam at the
+        // midpoint — SLIC's spatial boundary refinement can drift a few cells across the mask's
+        // exact pixel split on a flat-color image with no color signal to anchor it, which is
+        // expected and not what this test is checking.
+        let quarter = grid.columns / 4
+        for row in 0..<grid.rows {
+            for col in 0..<quarter {
+                #expect(grid.color(col: col, row: row) == .empty)
+            }
+            for col in (grid.columns - quarter)..<grid.columns {
+                #expect(grid.color(col: col, row: row) != .empty)
+            }
+        }
+    }
+
+    @Test("generate leaves every cell as a real palette color when the default UniformForegroundMaskProvider is used")
+    func generateWithoutBackgroundRemovalNeverProducesEmpty() {
+        let width = 40, height = 40
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let context = CGContext(
+            data: nil, width: width, height: height,
+            bitsPerComponent: 8, bytesPerRow: 0, space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        context.setFillColor(red: 0.5, green: 0.5, blue: 0.5, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        let cgImage = context.makeImage()!
+
+        let options = PatternGenerationOptions(columns: 8, rows: 8)
+        let grid = PatternGenerator.generate(
+            cgImage: cgImage,
+            importanceProvider: UniformImportanceMapProvider(),
+            options: options
+        )
+
+        #expect(grid.colors.allSatisfy { $0 != .empty })
+    }
 }

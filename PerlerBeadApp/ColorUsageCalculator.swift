@@ -12,6 +12,7 @@ enum ColorUsageCalculator {
         var counts: [String: Int] = [:]
         var colorByCode: [String: MardColor] = [:]
         for color in grid.colors {
+            guard color != .empty else { continue } // background isn't a bead color to buy/count
             counts[color.code, default: 0] += 1
             colorByCode[color.code] = color
         }

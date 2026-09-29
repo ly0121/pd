@@ -1,10 +1,10 @@
 import SwiftUI
 
 enum AppTheme {
-    static let coral = Color(red: 0.98, green: 0.55, blue: 0.60)
-    static let coralLight = Color(red: 0.99, green: 0.93, blue: 0.94)
-    static let cardBackground = Color(red: 0.99, green: 0.95, blue: 0.96)
-    static let textPrimary = Color(red: 0.25, green: 0.18, blue: 0.20)
+    static let coral = Color(red: 0.91, green: 0.63, blue: 0.71)       // macaron rose
+    static let coralLight = Color(red: 0.99, green: 0.96, blue: 0.93)  // cream ivory
+    static let cardBackground = Color(red: 1.00, green: 0.98, blue: 0.96) // cream white
+    static let textPrimary = Color(red: 0.24, green: 0.17, blue: 0.17)  // warm dark brown
 
     static let cardCornerRadius: CGFloat = 16
 }

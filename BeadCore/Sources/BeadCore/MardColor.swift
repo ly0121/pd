@@ -22,10 +22,88 @@ public struct MardColor: Equatable, Hashable, Sendable {
         let b = Double(value & 0x0000FF) / 255.0
         return (r, g, b)
     }
+
+    /// Sentinel used to mark a cell as "no bead here" (background removed). Not a real MARD
+    /// color and never appears in any palette array — code consuming `MardColor` values that
+    /// cares about background removal must explicitly check `color == .empty`.
+    public static let empty = MardColor(code: "EMPTY", hex: "FFFFFF")
 }
 
 public enum MardPalette {
+    // Trimmed to the user's actually-owned 90 MARD colors (name kept for compatibility
+    // with existing call sites; it no longer means "221").
     public static let standard221: [MardColor] = [
+        MardColor(code: "A1", hex: "FAF4C8"), MardColor(code: "A2", hex: "FFFFD5"),
+        MardColor(code: "A3", hex: "FEFF8B"), MardColor(code: "A4", hex: "FBED56"),
+        MardColor(code: "A6", hex: "FEAC4C"),
+        MardColor(code: "A7", hex: "FE8B4C"), MardColor(code: "A8", hex: "FFDA45"),
+        MardColor(code: "A9", hex: "FF995B"), MardColor(code: "A10", hex: "F77C31"),
+        MardColor(code: "A11", hex: "FFDD99"), MardColor(code: "A12", hex: "FE9F72"),
+        MardColor(code: "A14", hex: "FD543D"),
+        MardColor(code: "A17", hex: "FFE36E"), MardColor(code: "A18", hex: "FEBE7D"),
+        MardColor(code: "A25", hex: "FFD67D"), MardColor(code: "A26", hex: "FFC830"),
+
+        MardColor(code: "B1", hex: "E6EE31"), MardColor(code: "B2", hex: "63F347"),
+        MardColor(code: "B3", hex: "9EF780"), MardColor(code: "B4", hex: "5DE035"),
+        MardColor(code: "B5", hex: "35E352"), MardColor(code: "B6", hex: "65E2A6"),
+        MardColor(code: "B8", hex: "1C9C4F"),
+        MardColor(code: "B12", hex: "166F41"),
+        MardColor(code: "B13", hex: "CAEB7B"), 
+        MardColor(code: "B17", hex: "9BB13A"), MardColor(code: "B20", hex: "C2F0CC"),
+        MardColor(code: "B29", hex: "C5E254"),
+
+        MardColor(code: "C1", hex: "E8FFE7"), MardColor(code: "C2", hex: "A9F9FC"),
+        MardColor(code: "C3", hex: "A0E2FB"), MardColor(code: "C4", hex: "41CCFF"),
+        MardColor(code: "C5", hex: "01ACEB"), MardColor(code: "C6", hex: "50AAF0"),
+        MardColor(code: "C7", hex: "3677D2"), MardColor(code: "C8", hex: "0F54C0"),
+        MardColor(code: "C10", hex: "3EBCE2"),
+        MardColor(code: "C11", hex: "28DDDE"),
+        MardColor(code: "C23", hex: "C8E2FF"), MardColor(code: "C25", hex: "A9E5E5"),
+
+        MardColor(code: "D1", hex: "AEB4F2"), MardColor(code: "D2", hex: "858EDD"),
+        MardColor(code: "D5", hex: "B843C5"), MardColor(code: "D6", hex: "AC7BDE"),
+        MardColor(code: "D7", hex: "8854B3"), 
+        MardColor(code: "D9", hex: "D5B9F8"),
+        MardColor(code: "D11", hex: "B9BAE1"),
+        MardColor(code: "D13", hex: "B90095"), 
+        MardColor(code: "D15", hex: "2F1F90"), MardColor(code: "D16", hex: "E3E1EE"),
+        MardColor(code: "D19", hex: "D8C3D7"), MardColor(code: "D26", hex: "DFC2F8"),
+
+        MardColor(code: "E1", hex: "FDD3CC"), MardColor(code: "E2", hex: "FEC0DF"),
+        MardColor(code: "E3", hex: "FFB7E7"), MardColor(code: "E4", hex: "E8649E"),
+        MardColor(code: "E6", hex: "F13D74"),
+        MardColor(code: "E7", hex: "C63478"), MardColor(code: "E8", hex: "FFDBE9"),
+        MardColor(code: "E11", hex: "FCDDD2"),
+        MardColor(code: "E15", hex: "F8C7C9"), MardColor(code: "E16", hex: "FFF3EB"),
+        MardColor(code: "E17", hex: "FFE2EA"), MardColor(code: "E20", hex: "D8C7D1"),
+        MardColor(code: "E22", hex: "B785A1"),
+
+        MardColor(code: "F3", hex: "F74941"), MardColor(code: "F4", hex: "FC283C"),
+        MardColor(code: "F5", hex: "E7002F"),
+        MardColor(code: "F7", hex: "971937"), MardColor(code: "F8", hex: "BC0028"),
+        MardColor(code: "F11", hex: "5A2121"),
+        MardColor(code: "F13", hex: "F35744"),
+        MardColor(code: "F25", hex: "E54B4F"),
+
+        MardColor(code: "G1", hex: "FFE2CE"), MardColor(code: "G2", hex: "FFC4AA"),
+        MardColor(code: "G3", hex: "F4C3A5"), MardColor(code: "G4", hex: "E1B383"),
+        MardColor(code: "G5", hex: "EDB045"),
+        MardColor(code: "G7", hex: "9D5B3E"), MardColor(code: "G8", hex: "753832"),
+        MardColor(code: "G9", hex: "E6B483"), MardColor(code: "G10", hex: "D98C39"),
+        MardColor(code: "G12", hex: "FFC890"),
+        MardColor(code: "G13", hex: "B7714A"),
+        MardColor(code: "G17", hex: "78524B"),
+
+        MardColor(code: "H1", hex: "FDFBFF"), MardColor(code: "H2", hex: "FEFFFF"),
+        MardColor(code: "H4", hex: "89858C"),
+        MardColor(code: "H5", hex: "48464E"),
+        MardColor(code: "H7", hex: "000000"),
+    ]
+
+    /// The full 221-color MARD lineup (A26/B32/C29/D26/E24/F25/G21/H23/M15), before the user
+    /// trimmed `standard221` down to the ~90 colors they actually own. Backs the "全部" palette
+    /// preset in the material picker.
+    public static let allColors: [MardColor] = [
         MardColor(code: "A1", hex: "FAF4C8"), MardColor(code: "A2", hex: "FFFFD5"),
         MardColor(code: "A3", hex: "FEFF8B"), MardColor(code: "A4", hex: "FBED56"),
         MardColor(code: "A5", hex: "F4D738"), MardColor(code: "A6", hex: "FEAC4C"),

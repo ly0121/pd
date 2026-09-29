@@ -23,12 +23,14 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.liuyu.perlerbead.PerlerBeadApp
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "用于导入照片生成拼豆图纸"
+        INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "用于将拼豆图纸保存到相册"
         INFOPLIST_KEY_NSCameraUsageDescription: "用于拍照生成拼豆图纸"
         GENERATE_INFOPLIST_FILE: "YES"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: "46GQ33TNHQ"
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: "Apple Development"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - package: BeadCore
         product: BeadCore

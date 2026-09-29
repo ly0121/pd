@@ -16,27 +16,54 @@ struct BeadGridCanvas: View {
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
     @State private var isStrokeInProgress = false
+    /// The grid dimensions the current `scale` was fit to. Compared against the live grid so a
+    /// regenerate at a different size re-fits, while rotation or other re-layouts at the same
+    /// grid size leave the user's manual pinch-zoom alone.
+    @State private var fittedGridKey: String?
 
-    private var cellSize: CGFloat { 10 * scale }
+    private let baseCellSize: CGFloat = 10
+    private let minScale: CGFloat = 0.05
+    private let maxScale: CGFloat = 4.0
+
+    private var cellSize: CGFloat { baseCellSize * scale }
+    private var gridKey: String { "\(grid.columns)x\(grid.rows)" }
 
     var body: some View {
-        ScrollView([.horizontal, .vertical]) {
-            Canvas { context, _ in
-                for row in 0..<grid.rows {
-                    for col in 0..<grid.columns {
-                        let color = grid.color(col: col, row: row)
-                        let rect = CGRect(x: CGFloat(col) * cellSize, y: CGFloat(row) * cellSize, width: cellSize, height: cellSize)
-                        let isDimmed = highlightedColorCode != nil && highlightedColorCode != color.code
-                        let uiColor = Color(red: color.red, green: color.green, blue: color.blue)
-                        context.fill(Path(rect), with: .color(isDimmed ? uiColor.opacity(0.15) : uiColor))
-                        context.stroke(Path(rect), with: .color(.black.opacity(0.08)), lineWidth: 0.5)
+        GeometryReader { proxy in
+            ScrollView([.horizontal, .vertical]) {
+                Canvas { context, _ in
+                    for row in 0..<grid.rows {
+                        for col in 0..<grid.columns {
+                            let color = grid.color(col: col, row: row)
+                            let rect = CGRect(x: CGFloat(col) * cellSize, y: CGFloat(row) * cellSize, width: cellSize, height: cellSize)
+                            guard color != .empty else { continue } // background-removed cell: leave transparent
+                            let isDimmed = highlightedColorCode != nil && highlightedColorCode != color.code
+                            let uiColor = Color(red: color.red, green: color.green, blue: color.blue)
+                            context.fill(Path(rect), with: .color(isDimmed ? uiColor.opacity(0.15) : uiColor))
+                            context.stroke(Path(rect), with: .color(.black.opacity(0.08)), lineWidth: 0.5)
+                        }
                     }
                 }
+                .frame(width: CGFloat(grid.columns) * cellSize, height: CGFloat(grid.rows) * cellSize)
+                .gesture(strokeGesture)
             }
-            .frame(width: CGFloat(grid.columns) * cellSize, height: CGFloat(grid.rows) * cellSize)
-            .gesture(strokeGesture)
+            .gesture(magnificationGesture)
+            .onAppear { fitToScreen(containerSize: proxy.size) }
+            .onChange(of: gridKey) { _, _ in fitToScreen(containerSize: proxy.size) }
         }
-        .gesture(magnificationGesture)
+    }
+
+    /// Sets the initial zoom so the whole grid fits within the visible canvas area (never
+    /// zooming in past 1:1), rather than always starting at a fixed 10pt/cell that clips large
+    /// grids to a corner until the user manually pinches out.
+    private func fitToScreen(containerSize: CGSize) {
+        guard fittedGridKey != gridKey, containerSize.width > 0, containerSize.height > 0 else { return }
+        fittedGridKey = gridKey
+        let fitWidth = containerSize.width / (CGFloat(grid.columns) * baseCellSize)
+        let fitHeight = containerSize.height / (CGFloat(grid.rows) * baseCellSize)
+        let fitScale = max(minScale, min(fitWidth, fitHeight, 1.0))
+        scale = fitScale
+        lastScale = fitScale
     }
 
     private var strokeGesture: some Gesture {
@@ -56,7 +83,7 @@ struct BeadGridCanvas: View {
     private var magnificationGesture: some Gesture {
         MagnificationGesture()
             .onChanged { value in
-                scale = max(0.3, min(4.0, lastScale * value))
+                scale = max(minScale, min(maxScale, lastScale * value))
             }
             .onEnded { _ in
                 lastScale = scale

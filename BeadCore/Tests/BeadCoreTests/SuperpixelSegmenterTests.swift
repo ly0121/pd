@@ -46,6 +46,78 @@ struct SuperpixelSegmenterTests {
         #expect(stats[0].color.l > 90.0)
     }
 
+    @Test("cellStats computes plain (unweighted) mean contourFraction per cell when contourWeights is supplied")
+    func cellStatsAveragesContourWeights() {
+        let gray = LabColor(l: 50, a: 0, b: 0)
+        let image = PixelImage(width: 2, height: 2, pixels: [LabColor](repeating: gray, count: 4))
+        let importance = ImportanceMap.uniform(width: 2, height: 2)
+        let labels = SuperpixelSegmenter.initialLabels(width: 2, height: 2, columns: 1, rows: 1)
+        let contourWeights = [0.2, 0.8, 0.4, 0.6] // mean = 0.5
+
+        let stats = SuperpixelSegmenter.cellStats(
+            image: image, columns: 1, rows: 1, importance: importance, labels: labels, contourWeights: contourWeights
+        )
+
+        #expect(abs(stats[0].contourFraction - 0.5) < 0.001)
+    }
+
+    @Test("cellStats leaves contourFraction at 0 when contourWeights is omitted")
+    func cellStatsDefaultsContourFractionToZero() {
+        let gray = LabColor(l: 50, a: 0, b: 0)
+        let image = PixelImage(width: 2, height: 2, pixels: [LabColor](repeating: gray, count: 4))
+        let importance = ImportanceMap.uniform(width: 2, height: 2)
+        let labels = SuperpixelSegmenter.initialLabels(width: 2, height: 2, columns: 1, rows: 1)
+
+        let stats = SuperpixelSegmenter.cellStats(image: image, columns: 1, rows: 1, importance: importance, labels: labels)
+
+        #expect(stats[0].contourFraction == 0)
+    }
+
+    @Test("cellStats computes plain (unweighted) mean foregroundFraction per cell when foregroundWeights is supplied")
+    func cellStatsAveragesForegroundWeights() {
+        let gray = LabColor(l: 50, a: 0, b: 0)
+        let image = PixelImage(width: 2, height: 2, pixels: [LabColor](repeating: gray, count: 4))
+        let importance = ImportanceMap.uniform(width: 2, height: 2)
+        let labels = SuperpixelSegmenter.initialLabels(width: 2, height: 2, columns: 1, rows: 1)
+        let foregroundWeights = [0.1, 0.9, 0.3, 0.7] // mean = 0.5
+
+        let stats = SuperpixelSegmenter.cellStats(
+            image: image, columns: 1, rows: 1, importance: importance, labels: labels, foregroundWeights: foregroundWeights
+        )
+
+        #expect(abs(stats[0].foregroundFraction - 0.5) < 0.001)
+    }
+
+    @Test("cellStats leaves foregroundFraction at 0 when foregroundWeights is omitted")
+    func cellStatsDefaultsForegroundFractionToZero() {
+        let gray = LabColor(l: 50, a: 0, b: 0)
+        let image = PixelImage(width: 2, height: 2, pixels: [LabColor](repeating: gray, count: 4))
+        let importance = ImportanceMap.uniform(width: 2, height: 2)
+        let labels = SuperpixelSegmenter.initialLabels(width: 2, height: 2, columns: 1, rows: 1)
+
+        let stats = SuperpixelSegmenter.cellStats(image: image, columns: 1, rows: 1, importance: importance, labels: labels)
+
+        #expect(stats[0].foregroundFraction == 0)
+    }
+
+    @Test("cellStats computes contourFraction and foregroundFraction independently when both are supplied")
+    func cellStatsComputesBothFractionsIndependently() {
+        let gray = LabColor(l: 50, a: 0, b: 0)
+        let image = PixelImage(width: 2, height: 2, pixels: [LabColor](repeating: gray, count: 4))
+        let importance = ImportanceMap.uniform(width: 2, height: 2)
+        let labels = SuperpixelSegmenter.initialLabels(width: 2, height: 2, columns: 1, rows: 1)
+        let contourWeights = [1.0, 1.0, 1.0, 1.0] // mean = 1.0
+        let foregroundWeights = [0.0, 0.0, 0.0, 0.0] // mean = 0.0
+
+        let stats = SuperpixelSegmenter.cellStats(
+            image: image, columns: 1, rows: 1, importance: importance, labels: labels,
+            contourWeights: contourWeights, foregroundWeights: foregroundWeights
+        )
+
+        #expect(abs(stats[0].contourFraction - 1.0) < 0.001)
+        #expect(abs(stats[0].foregroundFraction - 0.0) < 0.001)
+    }
+
     @Test("segment converges on a flat-colored image producing exactly one label per cell region")
     func segmentFlatImageConverges() {
         let gray = LabColor(l: 50, a: 0, b: 0)
