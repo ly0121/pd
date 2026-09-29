@@ -33,17 +33,11 @@ final class PerlerBeadAppScreenshotWalkthrough: XCTestCase {
         Thread.sleep(forTimeInterval: 1.0)
         attachScreenshot(app, name: "05-pattern-editor")
 
+        // "保存" saves straight to the photo library with no confirmation sheet, so there's no
+        // separate export screen left to screenshot here.
         app.buttons["exportButton"].tap()
-        XCTAssertTrue(app.buttons["关闭"].waitForExistence(timeout: 10))
-        Thread.sleep(forTimeInterval: 1.0)
-        attachScreenshot(app, name: "06-export-view-top")
-
-        // The rendered pattern (grid + legend) is taller than one screen at this grid size, so
-        // scroll down to capture the legend section at the bottom of the export image too.
-        app.scrollViews.firstMatch.swipeUp()
-        app.scrollViews.firstMatch.swipeUp()
         Thread.sleep(forTimeInterval: 0.5)
-        attachScreenshot(app, name: "07-export-view-bottom-legend")
+        attachScreenshot(app, name: "06-after-save")
     }
 
     private func attachScreenshot(_ app: XCUIApplication, name: String) {

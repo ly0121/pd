@@ -31,7 +31,7 @@ struct GridSizePickerContent: View {
                     } label: {
                         Text(option.label)
                     }
-                    .buttonStyle(RoundedCardButtonStyle(isSelected: selectedSize == option.rawValue))
+                    .buttonStyle(RoundedCardButtonStyle(isSelected: selectedSize == option.rawValue, verticalPadding: 10))
                     .accessibilityIdentifier("gridSizeOption_\(option.rawValue)")
                 }
 
@@ -40,7 +40,7 @@ struct GridSizePickerContent: View {
                 } label: {
                     Text("自定义")
                 }
-                .buttonStyle(RoundedCardButtonStyle(isSelected: showingCustomField))
+                .buttonStyle(RoundedCardButtonStyle(isSelected: showingCustomField, verticalPadding: 10))
             }
             .padding()
 

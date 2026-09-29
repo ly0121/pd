@@ -115,6 +115,25 @@ struct PaletteOptimizerTests {
         #expect(result.cellPaletteColors.allSatisfy { $0.code == "LIGHT" })
     }
 
+    @Test("detected thin dark outlines survive averaging into a light cell")
+    func detectedThinOutlineSurvivesAveraging() {
+        let pixels = (0..<25).map { index in
+            LabColor(l: index % 5 == 2 ? 10 : 90, a: 0, b: 0)
+        }
+        let image = PixelImage(width: 5, height: 5, pixels: pixels)
+        let importance = ImportanceMap.uniform(width: 5, height: 5)
+        let palette = [MardColor(code: "LIGHT", hex: "E0E0E0"), MardColor(code: "DARK", hex: "202020")]
+        let natural = PaletteOptimizer.optimize(
+            image: image, columns: 1, rows: 1, importance: importance, palette: palette, iterations: 0
+        )
+        let outlined = PaletteOptimizer.optimize(
+            image: image, columns: 1, rows: 1, importance: importance, palette: palette, iterations: 0,
+            contourWeights: ContourDetector.detect(image)
+        )
+        #expect(natural.cellPaletteColors.first?.code == "LIGHT")
+        #expect(outlined.cellPaletteColors.first?.code == "DARK")
+    }
+
     @Test("cellStats on the result exposes contourFraction matching the input contourWeights")
     func resultExposesCellStatsWithContourFraction() {
         let gray = LabColor(l: 50, a: 0, b: 0)

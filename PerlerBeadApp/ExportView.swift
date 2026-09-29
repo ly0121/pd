@@ -1,5 +1,4 @@
 import BeadCore
-import Photos
 import SwiftUI
 
 /// Renders a full export image: one cell per bead color with its MARD code printed inside, plus
@@ -159,83 +158,6 @@ enum PatternExportRenderer {
             UIBezierPath(rect: swatchRect).stroke()
             let text = "\(entry.usage.color.code)  ×\(entry.usage.count)"
             text.draw(at: CGPoint(x: x + legendSwatchSize + 8, y: y + 2), withAttributes: attributes)
-        }
-    }
-}
-
-struct ExportView: View {
-    let grid: BeadGrid
-    let projectName: String
-    @Environment(\.dismiss) private var dismiss
-    @State private var renderedImage: UIImage?
-    @State private var saveResultMessage: String?
-
-    var body: some View {
-        NavigationStack {
-            ScrollView([.horizontal, .vertical]) {
-                if let renderedImage {
-                    Image(uiImage: renderedImage)
-                        .resizable()
-                        .interpolation(.none)
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: renderedImage.size.width, height: renderedImage.size.height)
-                } else {
-                    ProgressView()
-                }
-            }
-            .navigationTitle("导出图纸")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    Button("保存到相册") { saveToPhotoLibrary() }
-                        .disabled(renderedImage == nil)
-                }
-            }
-            .task {
-                renderedImage = PatternExportRenderer.render(grid)
-            }
-            .alert(
-                "保存失败",
-                isPresented: Binding(
-                    get: { saveResultMessage != nil },
-                    set: { if !$0 { saveResultMessage = nil } }
-                ),
-                presenting: saveResultMessage
-            ) { _ in
-                Button("好") { saveResultMessage = nil }
-            } message: { message in
-                Text(message)
-            }
-        }
-    }
-
-    /// Saves directly to the photo library with no confirmation prompt — the user explicitly
-    /// tapped a "保存到相册" button, so there's nothing left to confirm. Only surfaces UI when
-    /// something goes wrong (permission denied, write failure); silent success matches the
-    /// system Photos app's own save-from-share behavior.
-    private func saveToPhotoLibrary() {
-        guard let renderedImage else { return }
-
-        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-            switch status {
-            case .authorized, .limited:
-                PHPhotoLibrary.shared().performChanges({
-                    PHAssetChangeRequest.creationRequestForAsset(from: renderedImage)
-                }) { success, error in
-                    if !success {
-                        Task { @MainActor in
-                            saveResultMessage = error?.localizedDescription ?? "无法保存图片，请稍后重试"
-                        }
-                    }
-                }
-            default:
-                Task { @MainActor in
-                    saveResultMessage = "没有相册访问权限，请在系统设置中开启"
-                }
-            }
         }
     }
 }

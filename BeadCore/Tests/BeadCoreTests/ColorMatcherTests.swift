@@ -18,6 +18,47 @@ struct ColorMatcherTests {
         #expect(match.code == "H1" || match.code == "H2")
     }
 
+    @Test("neighboring grays do not jump at the HSL midpoint")
+    func neighboringGraysPreserveTone() {
+        let matches = [127, 128].map { value in
+            let channel = Double(value) / 255
+            return ColorMatcher.nearest(
+                to: LabColor(red: channel, green: channel, blue: channel), in: MardPalette.standard221
+            )
+        }
+        #expect(matches.map(\.code) == ["H4", "H4"])
+    }
+
+    @Test("unforced matching and ranking use continuous Lab distance within the selected palette")
+    func matchingUsesAllAllowedCandidates() {
+        for palette in [MardPalette.standard221, MardPalette.allColors] {
+            for channel in [0.1, 0.3, 0.49, 0.5, 0.51, 0.7, 0.9] {
+                for target in [
+                    LabColor(red: channel, green: channel, blue: channel),
+                    LabColor(red: 0.5, green: channel, blue: 0.3)
+                ] {
+                    let expected = palette.min { target.distance(to: $0.lab) < target.distance(to: $1.lab) }!
+                    let match = ColorMatcher.nearest(to: target, in: palette)
+                    let ranked = ColorMatcher.rankedCandidates(for: target, in: palette)
+                    #expect(match == expected)
+                    #expect(ranked.first == match)
+                    #expect(Set(ranked.map(\.code)) == Set(palette.map(\.code)))
+                }
+            }
+        }
+    }
+
+    @Test("every exact palette color remains an exact perceptual match")
+    func exactPaletteColorsPreserved() {
+        for palette in [MardPalette.standard221, MardPalette.allColors] {
+            for color in palette {
+                let match = ColorMatcher.nearest(to: color.lab, in: palette)
+                #expect(match.lab.distance(to: color.lab) < 0.000001)
+                #expect(palette.contains(match))
+            }
+        }
+    }
+
     @Test("distance to self is zero")
     func distanceToSelfIsZero() {
         let color = LabColor(red: 0.5, green: 0.3, blue: 0.8)
@@ -35,8 +76,8 @@ struct ColorMatcherTests {
         #expect(match.code == "X1")
     }
 
-    @Test("a light target never matches a dark-only candidate when a light one exists")
-    func lightnessClassIsRespected() {
+    @Test("a pale target retains its tone when a nearby pale candidate exists")
+    func paleTargetPrefersNearbyPaleCandidate() {
         let target = LabColor(red: 0.95, green: 0.9, blue: 0.92) // pale pink
         let palette = [
             MardColor(code: "DARK", hex: "1A0A0D"), // near-black, would win on raw distance to a saturated version
@@ -46,7 +87,7 @@ struct ColorMatcherTests {
         #expect(match.code == "LIGHT")
     }
 
-    @Test("a dark target never matches a light-only candidate when a dark one exists")
+    @Test("a dark target retains its tone when a nearby dark candidate exists")
     func darkTargetPrefersDarkCandidate() {
         let target = LabColor(red: 0.08, green: 0.05, blue: 0.06)
         let palette = [
@@ -57,18 +98,15 @@ struct ColorMatcherTests {
         #expect(match.code == "DARK")
     }
 
-    @Test("a high-saturation target prefers a high-saturation candidate over a closer low-saturation one")
-    func saturationClassIsRespected() {
-        // Target and both candidates share the same dark lightness class, isolating the
-        // saturation-class filter: MUTED is Lab-closer to the target but low-saturation, VIVID
-        // is farther but high-saturation like the target and should win.
-        let target = LabColor(red: 0.7, green: 0.098, blue: 0.098) // #B31919
+    @Test("a saturated target can use a closer muted bead to preserve its perceptual tone")
+    func closerMutedCandidatePreservesTone() {
+        let target = LabColor(red: 0.7, green: 0.098, blue: 0.098)
         let palette = [
-            MardColor(code: "MUTED", hex: "7D2828"), // low-saturation, closer in raw distance
-            MardColor(code: "VIVID", hex: "5A0005"), // high-saturation, correct saturation class
+            MardColor(code: "MUTED", hex: "7D2828"),
+            MardColor(code: "VIVID", hex: "5A0005"),
         ]
-        let match = ColorMatcher.nearest(to: target, in: palette)
-        #expect(match.code == "VIVID")
+        #expect(target.distance(to: palette[0].lab) < target.distance(to: palette[1].lab))
+        #expect(ColorMatcher.nearest(to: target, in: palette).code == "MUTED")
     }
 
     @Test("a near-gray target matches a neutral candidate rather than a chromatic one")
@@ -82,18 +120,15 @@ struct ColorMatcherTests {
         #expect(match.code == "NEUTRAL")
     }
 
-    @Test("a saturated target never matches its near-complementary hue when a same-hue-family candidate exists")
-    func complementaryHueIsExcluded() {
-        // Target, ORANGE, and CYAN share the same dark/high-saturation class, isolating the hue
-        // filter: ORANGE is Lab-closer (hue distance ~150°, near-complementary) but excluded;
-        // CYAN is farther but same hue family (~60° away) and should be preferred.
-        let target = LabColor(red: 0.1, green: 0.3, blue: 0.75) // #1A4DBF-ish saturated blue
+    @Test("sparse palettes use perceptual distance rather than a hard hue cutoff")
+    func sparsePaletteUsesPerceptualDistance() {
+        let target = LabColor(red: 0.1, green: 0.3, blue: 0.75)
         let palette = [
             MardColor(code: "ORANGE", hex: "AB6351"),
             MardColor(code: "CYAN", hex: "005A3F"),
         ]
-        let match = ColorMatcher.nearest(to: target, in: palette)
-        #expect(match.code == "CYAN")
+        #expect(target.distance(to: palette[0].lab) < target.distance(to: palette[1].lab))
+        #expect(ColorMatcher.nearest(to: target, in: palette).code == "ORANGE")
     }
 
     @Test("forcedLightness overrides the target's own lightness class")
@@ -109,7 +144,7 @@ struct ColorMatcherTests {
         #expect(match.code == "DARK")
     }
 
-    @Test("rankedCandidates returns every rule-compliant candidate sorted by distance, nearest first")
+    @Test("rankedCandidates returns all allowed candidates sorted by distance, nearest first")
     func rankedCandidatesSortedByDistance() {
         let target = LabColor(red: 0.9, green: 0.05, blue: 0.05)
         let palette = [

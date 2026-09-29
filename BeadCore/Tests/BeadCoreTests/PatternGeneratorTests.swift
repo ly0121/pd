@@ -104,6 +104,56 @@ struct PatternGeneratorTests {
         #expect(elapsedSeconds < 10.0)
     }
 
+    @Test("exact H2 and H4 checkerboards remain representable in either palette")
+    func exactCheckerboardPreservesColors() {
+        let white = MardPalette.standard221.first { $0.code == "H2" }!
+        let gray = MardPalette.standard221.first { $0.code == "H4" }!
+        let columns = 32, cellPixels = 6, width = 192
+        let pixels = (0..<width * width).map { index in
+            ((index % width / cellPixels + index / width / cellPixels) % 2 == 0 ? white : gray).lab
+        }
+        let image = PixelImage(width: width, height: width, pixels: pixels)
+        for palette in [MardPalette.standard221, MardPalette.allColors] {
+            let grid = PatternGenerator.generate(
+                image: image, importance: .uniform(width: width, height: width),
+                options: PatternGenerationOptions(columns: columns, rows: columns, palette: palette)
+            )
+            let expected = (0..<columns * columns).map { index in
+                (index % columns + index / columns) % 2 == 0 ? white : gray
+            }
+            #expect(grid.colors == expected)
+        }
+    }
+
+    @Test("smooth neutral ramps preserve light tones and order within the selected palette")
+    func smoothRampPreservesTonalRange() {
+        let columns = 32, cellPixels = 6, width = 192
+        let pixels = (0..<width * cellPixels).map { index in
+            let channel = 0.3 + 0.5 * Double(index % width) / Double(width - 1)
+            return LabColor(red: channel, green: channel, blue: channel)
+        }
+        let image = PixelImage(width: width, height: cellPixels, pixels: pixels)
+        let importance = ImportanceMap.uniform(width: width, height: cellPixels)
+        let labels = SuperpixelSegmenter.initialLabels(width: width, height: cellPixels, columns: columns, rows: 1)
+        let stats = SuperpixelSegmenter.cellStats(
+            image: image, columns: columns, rows: 1, importance: importance, labels: labels
+        )
+        for palette in [MardPalette.standard221, MardPalette.allColors] {
+            let grid = PatternGenerator.generate(
+                image: image, importance: importance,
+                options: PatternGenerationOptions(columns: columns, rows: 1, palette: palette)
+            )
+            #expect(grid.colors.allSatisfy { palette.contains($0) })
+            #expect(grid.colors.last!.lab.l > 65)
+            #expect(zip(grid.colors, grid.colors.dropFirst()).allSatisfy { $0.lab.l <= $1.lab.l })
+            let meanSquaredError = zip(stats, grid.colors).reduce(0.0) { sum, pair in
+                let distance = pair.0.color.distance(to: pair.1.lab)
+                return sum + distance * distance
+            } / Double(columns)
+            #expect(meanSquaredError.squareRoot() < 12)
+        }
+    }
+
     /// Fake provider standing in for a real Vision detection: marks the left half of the image
     /// as background (weight 0) and the right half as foreground (weight 1), so the test can
     /// assert on a known, deterministic split rather than depending on Vision's actual subject

@@ -57,6 +57,33 @@ struct BeadProjectRepositoryTests {
         #expect(decoded == grid)
     }
 
+    @Test("default decoding reads full MARD colors and EMPTY without changing stored codes")
+    func defaultDecodingReadsFullPalette() throws {
+        let repository = try Self.makeRepository()
+        let colors = MardPalette.allColors + [.empty]
+        let grid = BeadGrid(columns: colors.count, rows: 1, colors: colors)
+        let project = try repository.createProject(
+            name: "Full palette", originalImageData: Data(), grid: grid,
+            now: Date(timeIntervalSince1970: 1000)
+        )
+        let storedCodes = project.gridCodes
+        let decoded = try repository.decodeGrid(for: project)
+        #expect(decoded == grid)
+        #expect(project.gridCodes == storedCodes)
+    }
+
+    @Test("default decoding preserves the owned palette exactly")
+    func defaultDecodingPreservesOwnedPalette() throws {
+        let repository = try Self.makeRepository()
+        let colors = MardPalette.standard221
+        let grid = BeadGrid(columns: colors.count, rows: 1, colors: colors)
+        let project = try repository.createProject(
+            name: "Owned palette", originalImageData: Data(), grid: grid,
+            now: Date(timeIntervalSince1970: 1000)
+        )
+        #expect(try repository.decodeGrid(for: project) == grid)
+    }
+
     @Test("updateGrid overwrites gridCodes, dimensions, thumbnail, and modifiedAt")
     func updateGridOverwritesState() throws {
         let repository = try Self.makeRepository()

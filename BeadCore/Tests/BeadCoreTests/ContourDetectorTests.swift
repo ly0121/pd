@@ -44,9 +44,38 @@ struct ContourDetectorTests {
         let weights = ContourDetector.detect(image)
         let lightLineWeight = weights[3 * 8 + 4]
 
-        // Same edge magnitude as the dark-line-on-light-background case, but the line pixel
-        // itself is NOT darker than its neighborhood, so it should be strongly damped.
-        #expect(lightLineWeight < 0.35)
+        // A bright line is not evidence for forcing a dark bead, even at maximum contrast.
+        #expect(lightLineWeight < 0.18)
+    }
+
+    @Test("smooth Lab ramps never reach dark-outline forcing strength")
+    func smoothRampsAreNotDarkContours() {
+        for width in [192, 600] {
+            let pixels = (0..<width * 3).map { index in
+                LabColor(l: 30 + 50 * Double(index % width) / Double(width - 1), a: 0, b: 0)
+            }
+            let image = PixelImage(width: width, height: 3, pixels: pixels)
+            #expect(ContourDetector.detect(image).allSatisfy { $0 < 0.18 })
+        }
+    }
+
+    @Test("light sides of a sharp boundary are not dark contours")
+    func lightBoundaryIsNotForcedDark() {
+        let pixels = (0..<64).map { index in
+            LabColor(l: index % 8 < 4 ? 10 : 90, a: 0, b: 0)
+        }
+        let weights = ContourDetector.detect(PixelImage(width: 8, height: 8, pixels: pixels))
+        #expect(weights[3 * 8 + 3] > 0.18)
+        #expect(weights[3 * 8 + 4] == 0)
+    }
+
+    @Test("representable midgray edges are not darkened")
+    func midgrayEdgesAreNotDarkOutlines() {
+        let gray = MardPalette.standard221.first { $0.code == "H4" }!
+        let white = MardPalette.standard221.first { $0.code == "H2" }!
+        let pixels = (0..<64).map { index in (index % 8 < 4 ? gray : white).lab }
+        let weights = ContourDetector.detect(PixelImage(width: 8, height: 8, pixels: pixels))
+        #expect(weights.allSatisfy { $0 < 0.18 })
     }
 
     @Test("output has one weight per pixel, all within [0, 1]")

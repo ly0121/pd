@@ -35,7 +35,8 @@ public struct BeadProjectRepository {
         return try context.fetch(descriptor)
     }
 
-    public func decodeGrid(for project: BeadProject, palette: [MardColor]) throws -> BeadGrid {
+    /// Saved codes use the full catalog; the generation palette only limits newly chosen beads.
+    public func decodeGrid(for project: BeadProject, palette: [MardColor] = MardPalette.allColors) throws -> BeadGrid {
         try BeadGridCoding.decode(project.gridCodes, columns: project.columns, rows: project.rows, palette: palette)
     }
 

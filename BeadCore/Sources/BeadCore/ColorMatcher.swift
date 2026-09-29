@@ -81,12 +81,10 @@ extension HSLColor {
 }
 
 public enum ColorMatcher {
-    /// Rule-constrained nearest-color match: filters the palette down through lightness class,
-    /// saturation class, and hue proximity (excluding near-complementary hues) before picking the
-    /// closest remaining candidate by Lab distance. Each filter stage falls back to the previous
-    /// stage's candidate set if it would otherwise eliminate every option, so there's always a
-    /// result. `forcedLightness` overrides the target's own lightness class — used by contour
-    /// pixels, which must quantize to a dark bead regardless of the source pixel's exact tone.
+    /// Matches by continuous Lab distance within the caller's palette. Hard lightness/chroma
+    /// classes would discard closer colors at arbitrary thresholds, flattening tonal detail.
+    /// Only an explicit `forcedLightness` restricts candidates, to protect detected dark outlines.
+    /// If that class is absent, fall back to the supplied palette — never add unowned colors.
     ///
     /// This is the hot path (called per-cell, per-iteration by `PaletteOptimizer`), so it does a
     /// single linear-scan minimum rather than routing through `rankedCandidates`' sort — sorting
@@ -97,7 +95,7 @@ public enum ColorMatcher {
         in palette: [MardColor],
         forcedLightness: LightnessClass? = nil
     ) -> MardColor {
-        let candidates = filteredCandidates(for: color, in: palette, forcedLightness: forcedLightness)
+        let candidates = filteredCandidates(in: palette, forcedLightness: forcedLightness)
         var best = candidates[0]
         var bestDistance = color.distance(to: best.lab)
         for candidate in candidates.dropFirst() {
@@ -110,16 +108,14 @@ public enum ColorMatcher {
         return best
     }
 
-    /// Same rule-constrained filtering as `nearest`, but returns every surviving candidate sorted
-    /// by ascending Lab distance (nearest first). Used by gradient-order enforcement, which needs
-    /// to step to the *next*-best rule-compliant color rather than only the single best one; that
-    /// call site is far less frequent than `nearest`'s per-pixel hot path, so the sort cost is fine.
+    /// Uses the same candidates as `nearest`, sorted by ascending Lab distance. Gradient-order
+    /// enforcement can then choose the closest alternative that preserves the source's tone order.
     public static func rankedCandidates(
         for color: LabColor,
         in palette: [MardColor],
         forcedLightness: LightnessClass? = nil
     ) -> [MardColor] {
-        filteredCandidates(for: color, in: palette, forcedLightness: forcedLightness)
+        filteredCandidates(in: palette, forcedLightness: forcedLightness)
             .enumerated()
             .sorted { a, b in
                 let da = color.distance(to: a.element.lab)
@@ -131,29 +127,12 @@ public enum ColorMatcher {
     }
 
     private static func filteredCandidates(
-        for color: LabColor,
         in palette: [MardColor],
         forcedLightness: LightnessClass?
     ) -> [MardColor] {
         precondition(!palette.isEmpty, "palette must not be empty")
-
-        let targetHSL = HSLColor(lab: color)
-        let targetLightness = forcedLightness ?? targetHSL.lightnessClass
-
-        let lightnessFiltered = palette.filter { $0.hsl.lightnessClass == targetLightness }
-        let afterLightness = lightnessFiltered.isEmpty ? palette : lightnessFiltered
-
-        let targetSaturation = targetHSL.saturationClass
-        let saturationFiltered = afterLightness.filter { $0.hsl.saturationClass == targetSaturation }
-        let afterSaturation = saturationFiltered.isEmpty ? afterLightness : saturationFiltered
-
-        if targetSaturation == .neutral {
-            // Hue is meaningless for near-gray colors, so skip the complementary-hue filter.
-            return afterSaturation
-        }
-        let hueFiltered = afterSaturation.filter {
-            targetHSL.hueDistance(to: $0.hsl) <= HSLColor.complementaryHueThreshold
-        }
-        return hueFiltered.isEmpty ? afterSaturation : hueFiltered
+        guard let forcedLightness else { return palette }
+        let filtered = palette.filter { $0.hsl.lightnessClass == forcedLightness }
+        return filtered.isEmpty ? palette : filtered
     }
 }

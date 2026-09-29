@@ -1,5 +1,6 @@
 import BeadCore
 import BeadPersistence
+import Photos
 import SwiftData
 import SwiftUI
 
@@ -18,7 +19,7 @@ struct PatternEditorView: View {
     @State private var highlightedColorCode: String?
     @State private var eraseColor = MardColor(code: "H2", hex: "FEFFFF")
     @State private var loadError: String?
-    @State private var showingExport = false
+    @State private var saveResultMessage: String?
     @State private var saver: DebouncedGridSaver?
     @State private var showingSizePicker = false
     @State private var regenerateSize: Int = 0
@@ -63,23 +64,9 @@ struct PatternEditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button("导出") { showingExport = true }
+                Button("保存") { saveToPhotoLibrary() }
                     .disabled(grid == nil || isRegenerating)
                     .accessibilityIdentifier("exportButton")
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    showingSizePicker = true
-                } label: {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                }
-                .disabled(grid == nil || isRegenerating)
-                .accessibilityIdentifier("regenerateButton")
-            }
-        }
-        .sheet(isPresented: $showingExport) {
-            if let grid {
-                ExportView(grid: grid, projectName: project.name)
             }
         }
         .sheet(isPresented: $showingSizePicker) {
@@ -104,6 +91,18 @@ struct PatternEditorView: View {
         } message: {
             Text("当前手动上色的内容将被替换，且无法撤销。")
         }
+        .alert(
+            "保存失败",
+            isPresented: Binding(
+                get: { saveResultMessage != nil },
+                set: { if !$0 { saveResultMessage = nil } }
+            ),
+            presenting: saveResultMessage
+        ) { _ in
+            Button("好") { saveResultMessage = nil }
+        } message: { message in
+            Text(message)
+        }
         .task {
             loadGrid()
         }
@@ -112,12 +111,41 @@ struct PatternEditorView: View {
         }
     }
 
+    /// Renders the current grid to a shareable image and saves it directly to the photo library
+    /// with no confirmation prompt or preview screen — the user explicitly tapped "保存", so
+    /// there's nothing left to confirm. Only surfaces UI when something goes wrong (permission
+    /// denied, write failure); silent success matches the system Photos app's own save-from-share
+    /// behavior.
+    private func saveToPhotoLibrary() {
+        guard let grid else { return }
+        let image = PatternExportRenderer.render(grid)
+
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            switch status {
+            case .authorized, .limited:
+                PHPhotoLibrary.shared().performChanges({
+                    PHAssetChangeRequest.creationRequestForAsset(from: image)
+                }) { success, error in
+                    if !success {
+                        Task { @MainActor in
+                            saveResultMessage = error?.localizedDescription ?? "无法保存图片，请稍后重试"
+                        }
+                    }
+                }
+            default:
+                Task { @MainActor in
+                    saveResultMessage = "没有相册访问权限，请在系统设置中开启"
+                }
+            }
+        }
+    }
+
     private func loadGrid() {
         let repository = BeadProjectRepository(context: modelContext)
         saver = DebouncedGridSaver(repository: repository, project: project)
         regenerateSize = project.columns
         do {
-            grid = try repository.decodeGrid(for: project, palette: MardPalette.standard221)
+            grid = try repository.decodeGrid(for: project)
         } catch {
             loadError = "图纸数据读取失败：\(error.localizedDescription)"
         }
@@ -217,6 +245,13 @@ struct PatternEditorView: View {
             toolButton(.paint, systemImage: "paintbrush.fill")
             toolButton(.erase, systemImage: "eraser.fill")
             toolButton(.eyedropper, systemImage: "eyedropper")
+            Button {
+                showingSizePicker = true
+            } label: {
+                Image(systemName: "wand.and.stars")
+            }
+            .disabled(grid == nil || isRegenerating)
+            .accessibilityIdentifier("regenerateButton")
             Spacer()
             Button {
                 undo()

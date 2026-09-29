@@ -11,13 +11,14 @@ enum AppTheme {
 
 struct RoundedCardButtonStyle: ButtonStyle {
     var isSelected: Bool = false
+    var verticalPadding: CGFloat = 18
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 17, weight: .medium))
             .foregroundStyle(AppTheme.textPrimary)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 18)
+            .padding(.vertical, verticalPadding)
             .background(
                 RoundedRectangle(cornerRadius: AppTheme.cardCornerRadius, style: .continuous)
                     .fill(isSelected ? AppTheme.coral.opacity(0.35) : AppTheme.coralLight)

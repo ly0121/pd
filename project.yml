@@ -21,6 +21,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.liuyu.perlerbead.PerlerBeadApp
+        INFOPLIST_KEY_CFBundleDisplayName: "PerlerBead"
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: "用于导入照片生成拼豆图纸"
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: "用于将拼豆图纸保存到相册"
