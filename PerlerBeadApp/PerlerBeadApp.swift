@@ -16,8 +16,22 @@ struct PerlerBeadApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ProjectListView()
+            RootTabView()
         }
         .modelContainer(modelContainer)
+    }
+}
+
+private struct RootTabView: View {
+    @StateObject private var ownedPalette = OwnedPaletteModel()
+
+    var body: some View {
+        TabView {
+            ProjectListView()
+                .tabItem { Label("图纸", systemImage: "square.grid.3x3") }
+            OwnedPaletteView()
+                .tabItem { Label("我的颜色", systemImage: "paintpalette") }
+        }
+        .environmentObject(ownedPalette)
     }
 }

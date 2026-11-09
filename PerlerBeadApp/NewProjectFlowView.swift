@@ -76,12 +76,16 @@ final class NewProjectFlowModel: ObservableObject {
     /// `croppedImage` is the square-cropped image from the crop step. Depending on `aspectMode`,
     /// generation may use it directly (`.square`) or fall back to `originalImage` (`.fitContent`)
     /// to preserve the source photo's real aspect ratio instead of the crop frame's square shape.
-    func generate(from croppedImage: UIImage, columns: Int) {
+    func generate(from croppedImage: UIImage, columns: Int, ownedColors: [MardColor]) {
+        guard paletteSelection != .mine || !ownedColors.isEmpty else {
+            step = .failed("我的拼豆颜色为空，请先在「我的颜色」添加颜色")
+            return
+        }
         step = .generating
 
-        let sourceImage = aspectMode == .square ? croppedImage : (originalImage ?? croppedImage)
+        let sourceImage = Self.normalizedForGeneration(aspectMode == .square ? croppedImage : (originalImage ?? croppedImage))
         let (targetColumns, targetRows) = Self.dimensions(for: sourceImage, columns: columns, aspectMode: aspectMode)
-        let palette = paletteSelection.colors
+        let palette = paletteSelection.colors(ownedColors: ownedColors)
         let maskProvider: ForegroundMaskProvider = removeBackground ? VisionForegroundMaskProvider() : UniformForegroundMaskProvider()
 
         Task.detached(priority: .userInitiated) { [weak self] in
@@ -102,13 +106,24 @@ final class NewProjectFlowModel: ObservableObject {
                 cgImage: cgImage,
                 importanceProvider: VisionSaliencyImportanceMapProvider(),
                 options: options,
-                foregroundMaskProvider: maskProvider
+                foregroundMaskProvider: maskProvider,
+                sourceAlphaImage: sourceImage.cgImage
             )
             // Persist whichever image was actually used for generation (not necessarily the
             // square-cropped one) so a later "regenerate at a different size" reuses the same
             // source the user picked here.
             let imageData = sourceImage.pngData() ?? Data()
             await self?.finishGeneration(grid: grid, imageData: imageData)
+        }
+    }
+
+    nonisolated static func normalizedForGeneration(_ image: UIImage) -> UIImage {
+        guard image.imageOrientation != .up else { return image }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = image.scale
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: image.size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: image.size))
         }
     }
 
@@ -213,6 +228,7 @@ final class NewProjectFlowModelBox: ObservableObject {
 
 private struct NewProjectFlowContentView: View {
     @ObservedObject var model: NewProjectFlowModel
+    @EnvironmentObject private var ownedPalette: OwnedPaletteModel
     @Environment(\.dismiss) private var dismiss
     @State private var showingPaletteMaterialPicker = false
 
@@ -323,13 +339,22 @@ private struct NewProjectFlowContentView: View {
                 paletteMaterialRow
 
                 Button(generateButtonLabel) {
-                    model.generate(from: image, columns: model.selectedGridSize)
+                    model.generate(from: image, columns: model.selectedGridSize, ownedColors: ownedPalette.colors)
                 }
                 .buttonStyle(RoundedCardButtonStyle())
+                .disabled(model.paletteSelection == .mine && ownedPalette.codes.isEmpty)
                 .accessibilityIdentifier("generatePatternButton")
                 .padding()
+
+                if model.paletteSelection == .mine && ownedPalette.codes.isEmpty {
+                    Text("我的拼豆颜色库为空，请先在「我的颜色」添加颜色")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                }
             }
         }
+        .onAppear { ownedPalette.refresh() }
         .sheet(isPresented: $showingPaletteMaterialPicker) {
             PaletteMaterialPickerSheet(selection: Binding(
                 get: { model.paletteSelection },
@@ -356,7 +381,7 @@ private struct NewProjectFlowContentView: View {
                 Text("拼豆材料")
                     .foregroundStyle(AppTheme.textPrimary)
                 Spacer()
-                Text(model.paletteSelection.label)
+                Text(model.paletteSelection.label(ownedCount: ownedPalette.codes.count))
                     .foregroundStyle(.secondary)
                 Image(systemName: "chevron.right")
                     .foregroundStyle(.secondary)

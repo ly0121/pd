@@ -43,14 +43,17 @@ struct BeadGridCanvas: View {
                             let isDimmed = highlightedColorCode != nil && highlightedColorCode != color.code
                             let uiColor = Color(red: color.red, green: color.green, blue: color.blue)
                             context.fill(Path(rect), with: .color(isDimmed ? uiColor.opacity(0.15) : uiColor))
-                            context.stroke(Path(rect), with: .color(.black.opacity(0.08)), lineWidth: 0.5)
+                            if cellSize >= 4 {
+                                context.stroke(Path(rect), with: .color(.black.opacity(0.08)), lineWidth: 0.5)
+                            }
 
-                            if !isDimmed {
-                                drawCenteredCode(color.code, in: rect, color: color, context: context)
+                            if !isDimmed, let fontSize = PatternGridLayout.codeFontSize(cellSize: Double(cellSize), codeLength: color.code.count) {
+                                drawCenteredCode(color.code, in: rect, color: color, fontSize: CGFloat(fontSize), context: context)
                             }
                         }
                     }
 
+                    drawGroupLines(context: context)
                     drawRulerLabels(context: context)
                 }
                 .frame(width: labelMargin + CGFloat(grid.columns) * cellSize, height: labelMargin + CGFloat(grid.rows) * cellSize)
@@ -60,6 +63,21 @@ struct BeadGridCanvas: View {
             .onAppear { fitToScreen(containerSize: proxy.size) }
             .onChange(of: gridKey) { _, _ in fitToScreen(containerSize: proxy.size) }
         }
+    }
+
+    private func drawGroupLines(context: GraphicsContext) {
+        var path = Path()
+        for x in PatternGridLayout.groupPositions(cellCount: grid.columns, cellSize: Double(cellSize)) {
+            let position = labelMargin + CGFloat(x)
+            path.move(to: CGPoint(x: position, y: labelMargin))
+            path.addLine(to: CGPoint(x: position, y: labelMargin + CGFloat(grid.rows) * cellSize))
+        }
+        for y in PatternGridLayout.groupPositions(cellCount: grid.rows, cellSize: Double(cellSize)) {
+            let position = labelMargin + CGFloat(y)
+            path.move(to: CGPoint(x: labelMargin, y: position))
+            path.addLine(to: CGPoint(x: labelMargin + CGFloat(grid.columns) * cellSize, y: position))
+        }
+        context.stroke(path, with: .color(.black.opacity(0.42)), lineWidth: 1)
     }
 
     /// Mirrors PatternExportRenderer.drawLabels: row/column indices at a spaced interval (never
@@ -82,12 +100,13 @@ struct BeadGridCanvas: View {
     /// Mirrors PatternExportRenderer.drawCenteredCode: chooses black or white text based on the
     /// cell's perceptual luminance so the code stays legible against light and dark bead colors
     /// alike.
-    private func drawCenteredCode(_ code: String, in rect: CGRect, color: MardColor, context: GraphicsContext) {
+    private func drawCenteredCode(_ code: String, in rect: CGRect, color: MardColor, fontSize: CGFloat, context: GraphicsContext) {
         let luminance = 0.299 * color.red + 0.587 * color.green + 0.114 * color.blue
         let textColor: Color = luminance > 0.6 ? .black : .white
-        let fontSize = min(max(cellSize * 0.32, 6), 14)
         let text = Text(code).font(.system(size: fontSize, weight: .medium)).foregroundColor(textColor)
-        context.draw(text, at: CGPoint(x: rect.midX, y: rect.midY), anchor: .center)
+        let resolved = context.resolve(text)
+        guard resolved.measure(in: CGSize(width: 1_000, height: fontSize * 2)).width <= rect.width - 4 else { return }
+        context.draw(resolved, at: CGPoint(x: rect.midX, y: rect.midY), anchor: .center)
     }
 
     /// Sets the initial zoom so the whole grid fits within the visible canvas area (never

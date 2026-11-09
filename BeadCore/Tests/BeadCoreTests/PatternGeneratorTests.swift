@@ -206,6 +206,47 @@ struct PatternGeneratorTests {
         }
     }
 
+    @Test("source alpha outside stays empty and enclosed hole becomes H1 when available")
+    func sourceAlphaOverridesFinalGridAndRespectsPalette() {
+        let width = 15, height = 15
+        var rgba = [UInt8](repeating: 0, count: width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                let index = (y * width + x) * 4
+                rgba[index] = 120
+                rgba[index + 1] = 100
+                rgba[index + 2] = 80
+                rgba[index + 3] = (x < 3 || x >= 12 || y < 3 || y >= 12 || (x >= 6 && x < 9 && y >= 6 && y < 9)) ? 0 : 255
+            }
+        }
+        let context = CGContext(data: &rgba, width: width, height: height,
+                                bitsPerComponent: 8, bytesPerRow: width * 4,
+                                space: CGColorSpaceCreateDeviceRGB(),
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)!
+        let source = context.makeImage()!
+        let h1 = MardPalette.allColors.first { $0.code == "H1" }!
+        let dark = MardPalette.allColors.first { $0.code == "H7" }!
+        func generate(_ palette: [MardColor], mask: ForegroundMaskProvider = UniformForegroundMaskProvider()) -> BeadGrid {
+            PatternGenerator.generate(cgImage: source, importanceProvider: UniformImportanceMapProvider(),
+                                      options: PatternGenerationOptions(columns: 5, rows: 5, palette: palette, maxIsolatedCount: 2),
+                                      foregroundMaskProvider: mask, sourceAlphaImage: source)
+        }
+        let withH1 = generate([h1, dark])
+        #expect(withH1.color(col: 0, row: 0) == .empty)
+        #expect(withH1.color(col: 2, row: 2) == h1)
+        let withoutH1 = generate([dark])
+        #expect(withoutH1.color(col: 2, row: 2) == .empty)
+        let removed = generate([h1, dark], mask: EmptyForegroundMaskProvider())
+        #expect(removed.color(col: 2, row: 2) == h1)
+        #expect(removed.color(col: 0, row: 0) == .empty)
+    }
+
+    private struct EmptyForegroundMaskProvider: ForegroundMaskProvider {
+        func foregroundMask(for image: CGImage) -> [Double]? {
+            [Double](repeating: 0, count: image.width * image.height)
+        }
+    }
+
     @Test("generate leaves every cell as a real palette color when the default UniformForegroundMaskProvider is used")
     func generateWithoutBackgroundRemovalNeverProducesEmpty() {
         let width = 40, height = 40

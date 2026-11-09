@@ -53,12 +53,24 @@ public enum PatternGenerator {
         cgImage: CGImage,
         importanceProvider: ImportanceMapProvider,
         options: PatternGenerationOptions,
-        foregroundMaskProvider: ForegroundMaskProvider = UniformForegroundMaskProvider()
+        foregroundMaskProvider: ForegroundMaskProvider = UniformForegroundMaskProvider(),
+        sourceAlphaImage: CGImage? = nil
     ) -> BeadGrid {
         let image = PixelImage(cgImage: cgImage)
         let importance = importanceProvider.importanceMap(for: cgImage)
         let foregroundWeights = foregroundMaskProvider.foregroundMask(for: cgImage)
-        return generate(image: image, importance: importance, options: options, foregroundWeights: foregroundWeights)
+        var grid = generate(image: image, importance: importance, options: options, foregroundWeights: foregroundWeights)
+        let fixed = SourceAlphaCells.classify(source: sourceAlphaImage ?? cgImage,
+                                             columns: options.columns, rows: options.rows)
+        let h1 = options.palette.first { $0.code == "H1" }
+        for (index, cell) in fixed.enumerated() {
+            switch cell {
+            case .outside: grid.colors[index] = .empty
+            case .hole: grid.colors[index] = h1 ?? .empty
+            case nil: break
+            }
+        }
+        return grid
     }
 }
 

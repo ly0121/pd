@@ -151,6 +151,13 @@ Give brush, eraser, dropper and history buttons clear accessibility labels and i
 - [ ] **Step 4: Verify GREEN** targeted UI test plus complete app build; manual review small-screen toolbar fits without clipping (reduce spacing if necessary), mirror→undo→redo→leave/reopen restores mirrored result; no mirror during regeneration.
 - [ ] **Step 5: Commit** view, theme and UI tests with footer.
 
+### Task 4b: 调整尺寸始终采用最新个人库存
+
+- [ ] **Step 1: Add failing regression checks** to `PerlerBeadAppUITests/PerlerBeadAppUITests.swift`: use a test-only isolated `UserDefaults` suite/launch fixture to create an owned palette of one known code; generate an initial pattern with a different preset; update owned palette before tapping regenerate, confirm size, reopen and assert all produced grid codes belong to the *latest* owned palette via a package test around the extracted palette snapshot. Also test empty palette and failed persistence retain the original grid. Do not depend on visual colors alone.
+- [ ] **Step 2: Add `@EnvironmentObject private var ownedPalette: OwnedPaletteModel`** to `PerlerBeadApp/PatternEditorView.swift`. In the confirmation action call `ownedPalette.refresh()`, obtain `let palette = ownedPalette.colors`, and guard nonempty before setting `isRegenerating`. On empty, show `saveResultMessage = "我的拼豆颜色库为空，请先在「我的颜色」添加颜色"` and leave grid/history unchanged.
+- [ ] **Step 3: Change `regenerate(columns:)`** to accept the captured `[MardColor]` (`regenerate(columns: size, palette: palette)`). Pass `palette` into `PatternGenerationOptions(columns: columns, rows: columns, palette: palette)` inside the detached task. Never read the palette from `BeadGrid.colors`: used colors are only a subset of available inventory. A failed `downsample`/`cgImage` must reset `isRegenerating`, report an error and preserve the current grid. On return, call `try repository.updateGrid(...)` and only after that succeeds set `grid = newGrid` and `history = GridEditHistory()`; catch and report persistence failure while retaining the original grid and undo stack.
+- [ ] **Step 4: Verify:** UI test and package tests on a machine with Xcode; on this machine attempt tests and record SDK blocker. Run `swiftc -frontend -parse PerlerBeadApp/*.swift` and `git diff --check`. Existing project formats remain unchanged.
+
 ### Task 5: 完整核查
 
 - [ ] `cd BeadCore && swift test` → pass, or record toolchain blocker with actual error.

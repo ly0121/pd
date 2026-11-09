@@ -4,6 +4,7 @@ import SwiftUI
 /// in a flow step or wrapped in a standalone sheet — mirrors GridSizePickerContent/Sheet's split.
 struct PaletteMaterialPickerContent: View {
     @Binding var selection: PalettePreset
+    @EnvironmentObject private var ownedPalette: OwnedPaletteModel
     var onSelect: (() -> Void)?
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
@@ -16,7 +17,7 @@ struct PaletteMaterialPickerContent: View {
                         selection = preset
                         onSelect?()
                     } label: {
-                        Text(preset.label)
+                        Text(preset.label(ownedCount: ownedPalette.codes.count))
                     }
                     .buttonStyle(RoundedCardButtonStyle(isSelected: selection == preset))
                     .accessibilityIdentifier("paletteOption_\(preset)")

@@ -32,6 +32,8 @@ final class PerlerBeadAppScreenshotWalkthrough: XCTestCase {
         // Give the editor a beat to finish laying out the canvas + palette after the nav push.
         Thread.sleep(forTimeInterval: 1.0)
         attachScreenshot(app, name: "05-pattern-editor")
+        app.pinch(withScale: 3.0, velocity: 1.0)
+        attachScreenshot(app, name: "05b-pattern-editor-zoomed")
 
         // "保存" saves straight to the photo library with no confirmation sheet, so there's no
         // separate export screen left to screenshot here.

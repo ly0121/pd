@@ -5,6 +5,9 @@ enum AppTheme {
     static let coralLight = Color(red: 0.99, green: 0.96, blue: 0.93)  // cream ivory
     static let cardBackground = Color(red: 1.00, green: 0.98, blue: 0.96) // cream white
     static let textPrimary = Color(red: 0.24, green: 0.17, blue: 0.17)  // warm dark brown
+    static let editorBackground = Color(red: 1.00, green: 0.976, blue: 0.94)
+    static let editorPalette = Color(red: 1.00, green: 0.945, blue: 0.91)
+    static let editorToolbar = Color(red: 1.00, green: 0.988, blue: 0.965)
 
     static let cardCornerRadius: CGFloat = 16
 }

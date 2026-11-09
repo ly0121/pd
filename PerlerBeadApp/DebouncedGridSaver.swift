@@ -28,6 +28,11 @@ final class DebouncedGridSaver {
         }
     }
 
+    func cancelPendingSave() {
+        pendingTask?.cancel()
+        pendingTask = nil
+    }
+
     /// Cancels any pending debounced save and writes immediately — used when the view is about
     /// to disappear, so an in-flight edit isn't lost to a debounce window that never fires.
     func saveImmediately(_ grid: BeadGrid) {

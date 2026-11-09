@@ -61,4 +61,11 @@ public struct BeadGrid: Sendable, Equatable {
     public mutating func setColor(_ color: MardColor, col: Int, row: Int) {
         colors[row * columns + col] = color
     }
+
+    public func mirroredHorizontally() -> BeadGrid {
+        let reordered = (0..<rows).flatMap { row in
+            (0..<columns).map { col in color(col: columns - col - 1, row: row) }
+        }
+        return BeadGrid(columns: columns, rows: rows, colors: reordered)
+    }
 }

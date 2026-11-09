@@ -28,6 +28,7 @@ enum PatternExportRenderer {
             context.fill(CGRect(origin: .zero, size: canvasSize))
 
             drawGrid(grid, cellSize: cellSize, origin: CGPoint(x: labelMargin, y: labelMargin), context: context.cgContext)
+            drawGroupLines(grid, cellSize: cellSize, origin: CGPoint(x: labelMargin, y: labelMargin), context: context.cgContext)
             drawLabels(grid, cellSize: cellSize, origin: CGPoint(x: labelMargin, y: labelMargin))
             drawLegend(legendLayout, origin: CGPoint(x: 8, y: labelMargin + gridHeight + 8))
         }
@@ -62,6 +63,22 @@ enum PatternExportRenderer {
                 }
             }
         }
+    }
+
+    private static func drawGroupLines(_ grid: BeadGrid, cellSize: CGFloat, origin: CGPoint, context: CGContext) {
+        context.setStrokeColor(UIColor.black.withAlphaComponent(0.5).cgColor)
+        context.setLineWidth(1.2)
+        for x in PatternGridLayout.groupPositions(cellCount: grid.columns, cellSize: Double(cellSize)) {
+            let position = origin.x + CGFloat(x)
+            context.move(to: CGPoint(x: position, y: origin.y))
+            context.addLine(to: CGPoint(x: position, y: origin.y + CGFloat(grid.rows) * cellSize))
+        }
+        for y in PatternGridLayout.groupPositions(cellCount: grid.rows, cellSize: Double(cellSize)) {
+            let position = origin.y + CGFloat(y)
+            context.move(to: CGPoint(x: origin.x, y: position))
+            context.addLine(to: CGPoint(x: origin.x + CGFloat(grid.columns) * cellSize, y: position))
+        }
+        context.strokePath()
     }
 
     /// Draws a color code centered in `rect`, choosing black or white text based on the

@@ -11,9 +11,9 @@ enum PalettePreset: CaseIterable, Identifiable, Equatable {
 
     var id: Self { self }
 
-    var label: String {
+    func label(ownedCount: Int) -> String {
         switch self {
-        case .mine: return "我的 · \(MardPalette.standard221.count)色"
+        case .mine: return "我的 · \(ownedCount)色"
         case .n12: return "基础12色"
         case .n24: return "基础24色"
         case .n48: return "基础48色"
@@ -25,9 +25,9 @@ enum PalettePreset: CaseIterable, Identifiable, Equatable {
         }
     }
 
-    var colors: [MardColor] {
+    func colors(ownedColors: [MardColor]) -> [MardColor] {
         switch self {
-        case .mine: return MardPalette.standard221
+        case .mine: return ownedColors
         case .n12: return PaletteSampler.sample(count: 12, from: MardPalette.allColors)
         case .n24: return PaletteSampler.sample(count: 24, from: MardPalette.allColors)
         case .n48: return PaletteSampler.sample(count: 48, from: MardPalette.allColors)

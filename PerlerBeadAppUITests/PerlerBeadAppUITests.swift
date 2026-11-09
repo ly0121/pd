@@ -5,6 +5,92 @@ final class PerlerBeadAppUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    func testSaveBackgroundRemovedPatternToPhotos() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-UITestUseSampleImage"]
+        app.launch()
+        app.buttons["newProjectButton"].tap()
+        app.buttons["useSampleImageButton"].tap()
+        app.buttons["confirmCropButton"].tap()
+        let removeBackground = app.switches["removeBackgroundToggle"]
+        XCTAssertTrue(removeBackground.waitForExistence(timeout: 5))
+        removeBackground.tap()
+        app.buttons["gridSizeOption_16"].tap()
+        app.buttons["generatePatternButton"].tap()
+        let export = app.buttons["exportButton"]
+        XCTAssertTrue(export.waitForExistence(timeout: 30))
+        export.tap()
+        XCTAssertTrue(export.exists)
+    }
+
+    func testOwnedColorsTabAndAddingColor() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let ownedTab = app.tabBars.buttons["我的颜色"]
+        XCTAssertTrue(ownedTab.waitForExistence(timeout: 5))
+        ownedTab.tap()
+        let addButton = app.buttons["addOwnedColorButton"]
+        XCTAssertTrue(addButton.waitForExistence(timeout: 5))
+        let ownedA5 = app.buttons["removeOwnedColor_A5"]
+        let wasOwned = ownedA5.exists
+        if wasOwned { ownedA5.tap() }
+        addButton.tap()
+        let color = app.buttons["addOwnedColor_A5"]
+        XCTAssertTrue(color.waitForExistence(timeout: 5))
+        color.tap()
+        app.buttons["完成"].tap()
+        XCTAssertTrue(ownedA5.exists)
+        ownedA5.tap()
+        XCTAssertFalse(ownedA5.exists)
+        if wasOwned {
+            addButton.tap()
+            app.buttons["addOwnedColor_A5"].tap()
+            app.buttons["完成"].tap()
+        }
+    }
+
+    func testOwnedPaletteCountAppearsInGenerationSettings() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-UITestUseSampleImage"]
+        app.launch()
+        app.tabBars.buttons["我的颜色"].tap()
+        let countText = app.staticTexts["ownedPaletteCount"]
+        XCTAssertTrue(countText.waitForExistence(timeout: 5))
+        let count = Int(countText.label.replacingOccurrences(of: "色", with: ""))
+        XCTAssertNotNil(count)
+        app.tabBars.buttons["图纸"].tap()
+        app.buttons["newProjectButton"].tap()
+        app.buttons["useSampleImageButton"].tap()
+        app.buttons["confirmCropButton"].tap()
+        app.buttons["paletteMaterialRow"].tap()
+        let mine = app.buttons["paletteOption_mine"]
+        XCTAssertTrue(mine.waitForExistence(timeout: 5))
+        XCTAssertTrue(mine.label.contains("\(count ?? -1)色"))
+    }
+
+    func testMirrorCanUndoAndRedo() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-UITestUseSampleImage"]
+        app.launch()
+        app.buttons["newProjectButton"].tap()
+        app.buttons["useSampleImageButton"].tap()
+        app.buttons["confirmCropButton"].tap()
+        app.buttons["gridSizeOption_16"].tap()
+        app.buttons["generatePatternButton"].tap()
+        XCTAssertTrue(app.buttons["exportButton"].waitForExistence(timeout: 30))
+        let mirror = app.buttons["mirrorButton"]
+        XCTAssertTrue(mirror.exists)
+        mirror.tap()
+        let undo = app.buttons["undoButton"]
+        XCTAssertTrue(undo.isEnabled)
+        undo.tap()
+        let redo = app.buttons["redoButton"]
+        XCTAssertTrue(redo.isEnabled)
+        redo.tap()
+        XCTAssertTrue(app.buttons["exportButton"].isEnabled)
+    }
+
     /// Drives the full happy path end to end: new project -> sample image (substituting for the
     /// system photo picker, which can't be reliably automated) -> crop confirm -> grid size pick
     /// -> generate -> lands in the pattern editor -> saves directly to the photo library.

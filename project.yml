@@ -37,6 +37,17 @@ targets:
         product: BeadCore
       - package: BeadPersistence
         product: BeadPersistence
+  PerlerBeadAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: PerlerBeadAppTests
+    dependencies:
+      - target: PerlerBeadApp
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: "YES"
   PerlerBeadAppUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -56,6 +67,7 @@ schemes:
         PerlerBeadAppUITests: [test]
     test:
       targets:
+        - PerlerBeadAppTests
         - PerlerBeadAppUITests
     run:
       config: Debug

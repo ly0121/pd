@@ -11,9 +11,11 @@ enum EditorTool {
 struct PatternEditorView: View {
     let project: BeadProject
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var ownedPalette: OwnedPaletteModel
 
     @State private var grid: BeadGrid?
     @State private var history = GridEditHistory()
+    @State private var historyRevision = 0
     @State private var selectedTool: EditorTool = .paint
     @State private var selectedColor: MardColor?
     @State private var highlightedColorCode: String?
@@ -60,6 +62,7 @@ struct PatternEditorView: View {
                 ProgressView().padding()
             }
         }
+        .background(AppTheme.editorBackground.ignoresSafeArea())
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -83,7 +86,13 @@ struct PatternEditorView: View {
             Button("重新生成", role: .destructive) {
                 if let size = pendingRegenerateSize {
                     pendingRegenerateSize = nil
-                    regenerate(columns: size)
+                    ownedPalette.refresh()
+                    let palette = ownedPalette.colors
+                    guard !palette.isEmpty else {
+                        saveResultMessage = "我的拼豆颜色库为空，请先在「我的颜色」添加颜色"
+                        return
+                    }
+                    regenerate(columns: size, palette: palette)
                 }
             }
             .accessibilityIdentifier("confirmRegenerateButton")
@@ -107,7 +116,7 @@ struct PatternEditorView: View {
             loadGrid()
         }
         .onDisappear {
-            if let grid { saver?.saveImmediately(grid) }
+            if !isRegenerating, let grid { saver?.saveImmediately(grid) }
         }
     }
 
@@ -119,13 +128,39 @@ struct PatternEditorView: View {
     private func saveToPhotoLibrary() {
         guard let grid else { return }
         let image = PatternExportRenderer.render(grid)
+        let hasTransparentCells = grid.colors.contains(.empty)
+        let pngURL: URL?
+        if hasTransparentCells {
+            guard let data = image.pngData() else {
+                saveResultMessage = "无法生成透明图片，请稍后重试"
+                return
+            }
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension("png")
+            do {
+                try data.write(to: url, options: .atomic)
+                pngURL = url
+            } catch {
+                saveResultMessage = "无法准备透明图片：\(error.localizedDescription)"
+                return
+            }
+        } else {
+            pngURL = nil
+        }
 
         PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
             switch status {
             case .authorized, .limited:
                 PHPhotoLibrary.shared().performChanges({
-                    PHAssetChangeRequest.creationRequestForAsset(from: image)
+                    if let pngURL {
+                        let request = PHAssetCreationRequest.forAsset()
+                        request.addResource(with: .photo, fileURL: pngURL, options: nil)
+                    } else {
+                        PHAssetChangeRequest.creationRequestForAsset(from: image)
+                    }
                 }) { success, error in
+                    if let pngURL { try? FileManager.default.removeItem(at: pngURL) }
                     if !success {
                         Task { @MainActor in
                             saveResultMessage = error?.localizedDescription ?? "无法保存图片，请稍后重试"
@@ -133,6 +168,7 @@ struct PatternEditorView: View {
                     }
                 }
             default:
+                if let pngURL { try? FileManager.default.removeItem(at: pngURL) }
                 Task { @MainActor in
                     saveResultMessage = "没有相册访问权限，请在系统设置中开启"
                 }
@@ -154,8 +190,21 @@ struct PatternEditorView: View {
     /// Re-runs the full generation pipeline against the project's saved original photo at a new
     /// grid size, replacing the current grid (including any manual painting) once it completes.
     /// The caller is responsible for confirming with the user first, since this is destructive.
-    private func regenerate(columns: Int) {
-        guard let sourceImage = UIImage(data: project.originalImageData) else { return }
+    private func regenerate(columns: Int, palette: [MardColor]) {
+        guard let decodedImage = UIImage(data: project.originalImageData) else {
+            saveResultMessage = "原图读取失败，图纸没有被修改"
+            return
+        }
+        let sourceImage = NewProjectFlowModel.normalizedForGeneration(decodedImage)
+        guard let grid else { return }
+        do {
+            try BeadProjectRepository(context: modelContext).updateGrid(for: project, grid: grid, now: Date())
+        } catch {
+            modelContext.rollback()
+            saveResultMessage = "当前图纸保存失败，未开始重新生成：\(error.localizedDescription)"
+            return
+        }
+        saver?.cancelPendingSave()
         isRegenerating = true
 
         Task { @MainActor in
@@ -167,22 +216,30 @@ struct PatternEditorView: View {
                 guard let downsampled = NewProjectFlowModel.downsample(sourceImage, targetColumns: columns),
                       let cgImage = downsampled.cgImage
                 else { return nil }
-                let options = PatternGenerationOptions(columns: columns, rows: columns)
+                let options = PatternGenerationOptions(columns: columns, rows: columns, palette: palette)
                 return PatternGenerator.generate(
                     cgImage: cgImage,
                     importanceProvider: VisionSaliencyImportanceMapProvider(),
-                    options: options
+                    options: options,
+                    sourceAlphaImage: sourceImage.cgImage
                 )
             }.value
 
             guard let newGrid else {
                 isRegenerating = false
+                saveResultMessage = "重新生成失败，图纸没有被修改"
                 return
             }
             let repository = BeadProjectRepository(context: modelContext)
-            try? repository.updateGrid(for: project, grid: newGrid, now: Date())
-            grid = newGrid
-            history = GridEditHistory()
+            do {
+                try repository.updateGrid(for: project, grid: newGrid, now: Date())
+                self.grid = newGrid
+                history = GridEditHistory()
+                historyRevision += 1
+            } catch {
+                modelContext.rollback()
+                saveResultMessage = "重新生成保存失败，图纸没有被替换：\(error.localizedDescription)"
+            }
             isRegenerating = false
         }
     }
@@ -193,12 +250,18 @@ struct PatternEditorView: View {
         switch selectedTool {
         case .paint:
             guard let selectedColor else { return }
-            if isStrokeStart { history.recordBeforeEdit(currentGrid) }
+            if isStrokeStart {
+                history.recordBeforeEdit(currentGrid)
+                historyRevision += 1
+            }
             currentGrid.setColor(selectedColor, col: col, row: row)
             grid = currentGrid
             saver?.scheduleSave(currentGrid)
         case .erase:
-            if isStrokeStart { history.recordBeforeEdit(currentGrid) }
+            if isStrokeStart {
+                history.recordBeforeEdit(currentGrid)
+                historyRevision += 1
+            }
             currentGrid.setColor(eraseColor, col: col, row: row)
             grid = currentGrid
             saver?.scheduleSave(currentGrid)
@@ -237,58 +300,94 @@ struct PatternEditorView: View {
             }
             .padding()
         }
-        .background(AppTheme.cardBackground)
+        .background(AppTheme.editorPalette)
     }
 
     private var toolbar: some View {
-        HStack(spacing: 24) {
-            toolButton(.paint, systemImage: "paintbrush.fill")
-            toolButton(.erase, systemImage: "eraser.fill")
-            toolButton(.eyedropper, systemImage: "eyedropper")
+        HStack(spacing: 14) {
             Button {
                 showingSizePicker = true
             } label: {
                 Image(systemName: "wand.and.stars")
             }
             .disabled(grid == nil || isRegenerating)
+            .accessibilityLabel("调整图纸大小")
             .accessibilityIdentifier("regenerateButton")
-            Spacer()
+            toolButton(.paint, systemImage: "paintbrush.fill", label: "画笔")
+            toolButton(.erase, systemImage: "eraser.fill", label: "橡皮擦")
+            toolButton(.eyedropper, systemImage: "eyedropper", label: "吸管")
+            Button {
+                guard let current = grid, !isRegenerating else { return }
+                history.recordBeforeEdit(current)
+                historyRevision += 1
+                let mirrored = current.mirroredHorizontally()
+                grid = mirrored
+                saver?.scheduleSave(mirrored)
+            } label: {
+                Image(systemName: "arrow.left.and.right")
+            }
+            .disabled(grid == nil || isRegenerating)
+            .accessibilityLabel("左右镜像图纸")
+            .accessibilityIdentifier("mirrorButton")
+            Spacer(minLength: 0)
             Button {
                 undo()
             } label: {
                 Image(systemName: "arrow.uturn.backward")
             }
-            .disabled(!history.canUndo)
+            .disabled(!canUndo)
+            .accessibilityLabel("撤销")
+            .accessibilityIdentifier("undoButton")
             Button {
                 redo()
             } label: {
                 Image(systemName: "arrow.uturn.forward")
             }
-            .disabled(!history.canRedo)
+            .disabled(!canRedo)
+            .accessibilityLabel("重做")
+            .accessibilityIdentifier("redoButton")
         }
-        .font(.system(size: 20))
-        .padding()
-        .background(Color.white)
+        .foregroundStyle(AppTheme.textPrimary)
+        .font(.system(size: 19))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 16)
+        .background(AppTheme.editorToolbar)
     }
 
-    private func toolButton(_ tool: EditorTool, systemImage: String) -> some View {
+    private func toolButton(_ tool: EditorTool, systemImage: String, label: String) -> some View {
         Button {
             selectedTool = tool
         } label: {
             Image(systemName: systemImage)
-                .foregroundStyle(selectedTool == tool ? AppTheme.coral : AppTheme.textPrimary)
+                .foregroundStyle(selectedTool == tool ? AppTheme.textPrimary : AppTheme.textPrimary.opacity(0.75))
+                .padding(5)
+                .background(selectedTool == tool ? AppTheme.coral.opacity(0.35) : .clear, in: RoundedRectangle(cornerRadius: 8))
         }
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(selectedTool == tool ? [.isSelected] : [])
+    }
+
+    private var canUndo: Bool {
+        _ = historyRevision
+        return history.canUndo
+    }
+
+    private var canRedo: Bool {
+        _ = historyRevision
+        return history.canRedo
     }
 
     private func undo() {
         guard let currentGrid = grid, let previous = history.undo(current: currentGrid) else { return }
         grid = previous
+        historyRevision += 1
         saver?.scheduleSave(previous)
     }
 
     private func redo() {
         guard let currentGrid = grid, let next = history.redo(current: currentGrid) else { return }
         grid = next
+        historyRevision += 1
         saver?.scheduleSave(next)
     }
 }
