@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>短段渐变对比</title>
+  <style>
+    /* Aligned workbench: three measured fixtures, each with original and two real grid renders. */
+    :root { --bg:#f5f7f9; --panel:#ffffff; --text:#243341; --muted:#526577; --line:#bac9d6; --accent:#245b87; --note:#e5f0f8; --source:#edf0f2; --display:ui-rounded,"PingFang SC",system-ui,sans-serif; --body:"PingFang SC",system-ui,sans-serif; }
+    @media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) { --bg:#18242d; --panel:#263743; --text:#f3f7fa; --muted:#c2d3df; --line:#526b7a; --accent:#9bd3f7; --note:#304858; --source:#dce0e2; color-scheme:dark; } }
+    :root[data-theme="dark"] { --bg:#18242d; --panel:#263743; --text:#f3f7fa; --muted:#c2d3df; --line:#526b7a; --accent:#9bd3f7; --note:#304858; --source:#dce0e2; color-scheme:dark; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding-inline:clamp(16px,4vw,48px); padding-block:32px 64px; background:var(--bg); color:var(--text); font:16px/1.6 var(--body); }
+    main { max-width:1100px; margin-inline:auto; }
+    header { display:grid; gap:12px; margin-block-end:32px; }
+    .eyebrow { color:var(--accent); font-size:12px; font-weight:700; letter-spacing:.1em; }
+    h1 { margin:0; font:700 clamp(26px,3.5vw,40px)/1.24 var(--display); text-wrap:balance; }
+    h2 { margin:0; font:700 21px/1.35 var(--display); text-wrap:balance; }
+    p { margin:0; max-width:75ch; }
+    .intro, .case-head p, footer { color:var(--muted); }
+    .notice { background:var(--note); border-inline-start:4px solid var(--accent); padding:14px 18px; }
+    .cases { display:grid; gap:30px; }
+    article { min-width:0; background:var(--panel); border:1px solid var(--line); padding:clamp(16px,2.4vw,26px); display:grid; gap:16px; }
+    .case-head { display:flex; justify-content:space-between; align-items:start; flex-wrap:wrap; gap:12px; }
+    .case-head p { font-size:14px; }
+    .result { color:var(--accent); border:1px solid var(--line); padding:4px 10px; font-size:13px; font-weight:700; font-variant-numeric:tabular-nums; }
+    .triptych { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+    figure { margin:0; min-width:0; }
+    figcaption { font-size:13px; font-weight:700; margin-block-end:8px; }
+    .window { max-width:100%; width:100%; aspect-ratio:240/192; border:1px solid var(--line); background:var(--source); background-image:var(--image); background-size:310% 100%; background-repeat:no-repeat; }
+    .source { background-position:left center; } .current { background-position:center center; } .candidate { background-position:right center; }
+    .details { border-top:1px solid var(--line); padding-block-start:12px; color:var(--muted); font-size:13px; font-variant-numeric:tabular-nums; }
+    .details strong { color:var(--text); }
+    footer { border-top:1px solid var(--line); margin-block-start:34px; padding-block-start:16px; font-size:13px; }
+    a { color:var(--accent); text-underline-offset:3px; }
+    a:focus-visible { outline:3px solid var(--accent); outline-offset:3px; }
+    @media (max-width:650px) { .triptych { grid-template-columns:1fr; } .window { max-width:440px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="eyebrow">拼豆图纸 · 2–5 格连续色段</span>
+    <h1>短段渐变对比</h1>
+    <p class="intro">原图为 240 × 192 像素；图纸为 40 × 32 格。每组依次展示原图、当前生成图纸、实验候选图纸。三栏来自实际测试输出，彼此坐标对齐。</p>
+    <p class="notice"><strong>三组均为 0 格改色，没有视觉改善。</strong>平滑样图无结构合格短段；另外两组虽有短段，却无可行候选。这一实验没有接入 App 默认生成，未调整细节保护或 1% 预算。</p>
+  </header>
+  <section class="cases" aria-label="短段渐变实验三组样图">
+    <article style="--image:url('2026-11-09-gradient-short-run-smooth-comparison.png')">
+      <div class="case-head"><div><h2>平滑灰度渐变</h2><p>连续明暗源图；原图矩形没有粗糙纹理。</p></div><span class="result">0 / 1280 非固定格</span></div>
+      <div class="triptych">
+        <figure><figcaption>原图</figcaption><div class="window source" role="img" aria-label="平滑灰度渐变原图"></div></figure>
+        <figure><figcaption>目前图纸</figcaption><div class="window current" role="img" aria-label="平滑渐变的当前生成图纸"></div></figure>
+        <figure><figcaption>实验候选 · 无变化</figcaption><div class="window candidate" role="img" aria-label="与当前图纸完全一致的平滑渐变实验候选"></div></figure>
+      </div>
+      <div class="details">结构合格短段 <strong>0</strong> · 可行候选 <strong>0</strong> · 异色相邻边 <strong>96 → 96</strong> · 平均 SLIC ΔE76 <strong>8.8864 → 8.8864</strong></div>
+    </article>
+    <article style="--image:url('2026-11-09-gradient-short-run-contour-comparison.png')">
+      <div class="case-head"><div><h2>渐变与细轮廓</h2><p>暗线、彩色边缘、透明外圈和孔洞均维持原位。</p></div><span class="result">0 / 1000 非固定格</span></div>
+      <div class="triptych">
+        <figure><figcaption>原图</figcaption><div class="window source" role="img" aria-label="带暗轮廓及透明孔洞的原图"></div></figure>
+        <figure><figcaption>目前图纸</figcaption><div class="window current" role="img" aria-label="带轮廓的当前生成图纸"></div></figure>
+        <figure><figcaption>实验候选 · 无变化</figcaption><div class="window candidate" role="img" aria-label="与当前带轮廓图纸完全一致的实验候选"></div></figure>
+      </div>
+      <div class="details">结构合格短段 <strong>11</strong> · 可行候选 <strong>0</strong> · 固定 EMPTY / H1 <strong>272 / 8</strong> · 异色相邻边 <strong>199 → 199</strong> · 平均 SLIC ΔE76 <strong>9.2470 → 9.2470</strong></div>
+    </article>
+    <article style="--image:url('2026-11-09-gradient-short-run-texture-comparison.png')">
+      <div class="case-head"><div><h2>渐变与真实纹理</h2><p>蓝色条纹与圆形斑点是源图细节，不是待清理噪点。</p></div><span class="result">0 / 1280 非固定格</span></div>
+      <div class="triptych">
+        <figure><figcaption>原图</figcaption><div class="window source" role="img" aria-label="有条纹及斑点的原图"></div></figure>
+        <figure><figcaption>目前图纸</figcaption><div class="window current" role="img" aria-label="带纹理的当前生成图纸"></div></figure>
+        <figure><figcaption>实验候选 · 无变化</figcaption><div class="window candidate" role="img" aria-label="与当前带纹理图纸完全一致的实验候选"></div></figure>
+      </div>
+      <div class="details">结构合格短段 <strong>72</strong> · 可行候选 <strong>0</strong> · 原图像素粗糙格 <strong>187</strong> · 异色相邻边 <strong>398 → 398</strong> · 平均 SLIC ΔE76 <strong>9.8580 → 9.8580</strong></div>
+    </article>
+  </section>
+  <footer>完整平均值、p95 / p99、色差跳变区间及复现方法见 <a href="2026-11-09-gradient-short-run-comparison.md">实测记录</a>。没有改色，不应将本次结果表述为渐变改善。</footer>
+</main>
+</body>
+</html>

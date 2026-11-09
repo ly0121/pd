@@ -42,13 +42,14 @@ public enum PaletteOptimizer {
         backgroundRemovalThreshold: Double = 0.3
     ) -> JointOptimizationResult {
         precondition(!palette.isEmpty, "palette must not be empty")
+        let preparedPalette = PreparedPalette(palette)
 
         func paletteColor(for stat: CellStats) -> MardColor {
             if foregroundWeights != nil, stat.foregroundFraction < backgroundRemovalThreshold {
                 return .empty
             }
             let forcedLightness: LightnessClass? = stat.contourFraction >= contourForcingThreshold ? .dark : nil
-            return ColorMatcher.nearest(to: stat.color, in: palette, forcedLightness: forcedLightness)
+            return preparedPalette.nearest(to: stat.color, forcedLightness: forcedLightness)
         }
 
         var labels = SuperpixelSegmenter.initialLabels(width: image.width, height: image.height, columns: columns, rows: rows)

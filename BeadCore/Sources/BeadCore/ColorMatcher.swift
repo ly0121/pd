@@ -80,6 +80,48 @@ extension HSLColor {
     }
 }
 
+/// Prepared once per optimization; retains palette order and duplicates for strict-< tie behavior.
+/// Precomputes each supported lightness subset, falling back to all candidates when absent.
+struct PreparedPalette {
+    private struct Candidate {
+        let color: MardColor
+        let lab: LabColor
+        let lightness: LightnessClass
+    }
+
+    private let candidates: [Candidate]
+    private let darkCandidates: [Candidate]
+    private let lightCandidates: [Candidate]
+
+    init(_ palette: [MardColor]) {
+        precondition(!palette.isEmpty, "palette must not be empty")
+        candidates = palette.map { color in
+            Candidate(color: color, lab: color.lab, lightness: color.hsl.lightnessClass)
+        }
+        darkCandidates = candidates.filter { $0.lightness == .dark }
+        lightCandidates = candidates.filter { $0.lightness == .light }
+    }
+
+    func nearest(to color: LabColor, forcedLightness: LightnessClass? = nil) -> MardColor {
+        let available: [Candidate]
+        switch forcedLightness {
+        case .dark where !darkCandidates.isEmpty: available = darkCandidates
+        case .light where !lightCandidates.isEmpty: available = lightCandidates
+        default: available = candidates
+        }
+        var best = available[0]
+        var bestDistance = color.distance(to: best.lab)
+        for candidate in available.dropFirst() {
+            let distance = color.distance(to: candidate.lab)
+            if distance < bestDistance {
+                bestDistance = distance
+                best = candidate
+            }
+        }
+        return best.color
+    }
+}
+
 public enum ColorMatcher {
     /// Matches by continuous Lab distance within the caller's palette. Hard lightness/chroma
     /// classes would discard closer colors at arbitrary thresholds, flattening tonal detail.
