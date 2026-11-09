@@ -1,0 +1,23 @@
+<h2>图纸缩放时，格子里显示什么？</h2>
+<p class="subtitle">这是设计示意，不是实际 App 截图。下方模拟同一幅拼豆图纸在三个缩放级别下的表现：每 5 格的深色贯穿线始终存在；编号只在足够清晰时出现。</p>
+<style>
+  .bead-examples {display:flex;gap:18px;flex-wrap:wrap;margin:22px 0}
+  .bead-example {flex:1;min-width:215px;padding:14px;border:1px solid #d7d7db;border-radius:14px;background:#fff;color:#222}
+  .bead-example h3 {margin:0 0 5px;font-size:16px}.bead-example p {font-size:13px;line-height:1.4;margin:8px 0 0;color:#555}
+  .preview {width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(10,1fr);grid-template-rows:repeat(10,1fr);overflow:hidden;border:2px solid #565263;background:white;margin-top:12px}
+  .bead {display:flex;align-items:center;justify-content:center;box-sizing:border-box;border-right:1px solid rgba(30,25,36,.15);border-bottom:1px solid rgba(30,25,36,.15);font-weight:600;white-space:nowrap;overflow:hidden}
+  .bead:nth-child(10n + 5) {border-right:2px solid #565263}.bead:nth-child(n + 41):nth-child(-n + 50) {border-bottom:2px solid #565263}
+  .small .bead {font-size:0}.medium .bead {font-size:9px}.large .bead {font-size:12px}
+  .note {padding:12px 16px;border-radius:10px;background:#f3f5fa;color:#30364a;margin:18px 0}
+</style>
+<div class="bead-examples" id="bead-examples"></div>
+<p class="note">重点不是字体固定跟着缩放，而是缩略时只看色块、放大到文字确实能放进单格时才显示；保存到相册的图片可以单独用清晰大尺寸渲染，不受当前手势缩放影响。</p>
+<script>
+const examples = [
+  {type:'small',title:'全图概览',desc:'只显示色块；粗网格线保留，避免文字淹没图案。'},
+  {type:'medium',title:'中等倍率',desc:'格子尚小，优先保留色块（图中的文字仅示意临界状态）。'},
+  {type:'large',title:'近距离编辑',desc:'单格足够大时，显示适配格宽的颜色编号。'}
+];
+const palette = ['#f6e9ed','#e9a7ba','#fff4ef','#eac75e','#cfdf83','#91b46b','#fff4ef','#f8d0da','#fff8f2','#e38aab'];
+document.getElementById('bead-examples').innerHTML = examples.map(e => `<div class="bead-example ${e.type}"><h3>${e.title}</h3><div class="preview">${Array.from({length:100},(_,i)=>{const row=Math.floor(i/10), col=i%10;const idx=(Math.floor(Math.hypot(col-4.5,row-4.5)*2)+row)%palette.length;return `<span class="bead" style="background:${palette[idx]};color:${idx===3?'#302715':'#442d3b'}">${['E4','F7','H2','A26','B29','B17','H2','F20','H2','E25'][idx]}</span>`}).join('')}</div><p>${e.desc}</p></div>`).join('');
+</script>
