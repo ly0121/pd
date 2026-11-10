@@ -40,6 +40,12 @@ struct PatternEditorView: View {
                         }
                     )
                     .background(Color.white)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("图纸画布")
+                    .accessibilityValue("\(grid.columns)×\(grid.rows)")
+                    .accessibilityIdentifier("patternGridCanvas")
+                    .disabled(isRegenerating)
+                    .allowsHitTesting(!isRegenerating)
 
                     if isRegenerating {
                         Color.black.opacity(0.15)
@@ -213,6 +219,10 @@ struct PatternEditorView: View {
             // closure only takes and returns plain values, and all SwiftData access happens
             // back on the MainActor below once it returns.
             let newGrid = await Task.detached(priority: .userInitiated) { () -> BeadGrid? in
+                // Hold only UI-test runs long enough to inspect the locked editor deterministically.
+                if ProcessInfo.processInfo.arguments.contains("-UITestHoldEditorRegeneration") {
+                    try? await Task.sleep(for: .seconds(8))
+                }
                 guard let downsampled = NewProjectFlowModel.downsample(sourceImage, targetColumns: columns),
                       let cgImage = downsampled.cgImage
                 else { return nil }
@@ -245,7 +255,7 @@ struct PatternEditorView: View {
     }
 
     private func handleCellInteraction(col: Int, row: Int, isStrokeStart: Bool) {
-        guard var currentGrid = grid else { return }
+        guard !isRegenerating, var currentGrid = grid else { return }
 
         switch selectedTool {
         case .paint:
@@ -277,6 +287,7 @@ struct PatternEditorView: View {
             HStack(spacing: 10) {
                 ForEach(ColorUsageCalculator.usages(for: grid)) { usage in
                     Button {
+                        guard !isRegenerating else { return }
                         selectedColor = usage.color
                         selectedTool = .paint
                         highlightedColorCode = (highlightedColorCode == usage.color.code) ? nil : usage.color.code
@@ -296,6 +307,8 @@ struct PatternEditorView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .disabled(isRegenerating)
+                    .accessibilityIdentifier("patternColorButton")
                 }
             }
             .padding()
@@ -335,7 +348,7 @@ struct PatternEditorView: View {
             } label: {
                 Image(systemName: "arrow.uturn.backward")
             }
-            .disabled(!canUndo)
+            .disabled(isRegenerating || !canUndo)
             .accessibilityLabel("撤销")
             .accessibilityIdentifier("undoButton")
             Button {
@@ -343,7 +356,7 @@ struct PatternEditorView: View {
             } label: {
                 Image(systemName: "arrow.uturn.forward")
             }
-            .disabled(!canRedo)
+            .disabled(isRegenerating || !canRedo)
             .accessibilityLabel("重做")
             .accessibilityIdentifier("redoButton")
         }
@@ -356,6 +369,7 @@ struct PatternEditorView: View {
 
     private func toolButton(_ tool: EditorTool, systemImage: String, label: String) -> some View {
         Button {
+            guard !isRegenerating else { return }
             selectedTool = tool
         } label: {
             Image(systemName: systemImage)
@@ -363,6 +377,7 @@ struct PatternEditorView: View {
                 .padding(5)
                 .background(selectedTool == tool ? AppTheme.coral.opacity(0.35) : .clear, in: RoundedRectangle(cornerRadius: 8))
         }
+        .disabled(isRegenerating)
         .accessibilityLabel(label)
         .accessibilityAddTraits(selectedTool == tool ? [.isSelected] : [])
     }
@@ -378,14 +393,14 @@ struct PatternEditorView: View {
     }
 
     private func undo() {
-        guard let currentGrid = grid, let previous = history.undo(current: currentGrid) else { return }
+        guard !isRegenerating, let currentGrid = grid, let previous = history.undo(current: currentGrid) else { return }
         grid = previous
         historyRevision += 1
         saver?.scheduleSave(previous)
     }
 
     private func redo() {
-        guard let currentGrid = grid, let next = history.redo(current: currentGrid) else { return }
+        guard !isRegenerating, let currentGrid = grid, let next = history.redo(current: currentGrid) else { return }
         grid = next
         historyRevision += 1
         saver?.scheduleSave(next)

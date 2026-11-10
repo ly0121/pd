@@ -80,6 +80,9 @@ public enum SourceAlphaCells {
             return [FixedCell?](repeating: nil, count: columns * rows)
         }
         context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+        if stride(from: 3, to: rgba.count, by: 4).allSatisfy({ rgba[$0] == 255 }) {
+            return [FixedCell?](repeating: nil, count: columns * rows)
+        }
         let alpha = stride(from: 3, to: rgba.count, by: 4).map { rgba[$0] }
         return classify(alpha: alpha, width: width, height: height, columns: columns, rows: rows)
     }

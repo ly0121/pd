@@ -159,6 +159,70 @@ final class PerlerBeadAppUITests: XCTestCase {
         XCTAssertTrue(anyProjectCard.waitForExistence(timeout: 5))
     }
 
+    /// A pending save of the pre-regeneration grid must never overwrite the new dimensions.
+    func testRegenerationLocksEditorAndPersistsNewSize() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-UITestUseSampleImage", "-UITestHoldEditorRegeneration"]
+        app.launch()
+        defer { app.terminate() }
+
+        app.buttons["newProjectButton"].tap()
+        app.buttons["useSampleImageButton"].tap()
+        app.buttons["confirmCropButton"].tap()
+        app.buttons["gridSizeOption_16"].tap()
+        app.buttons["generatePatternButton"].tap()
+        let export = app.buttons["exportButton"]
+        XCTAssertTrue(export.waitForExistence(timeout: 30))
+        let canvas = app.otherElements["patternGridCanvas"]
+        XCTAssertEqual(canvas.value as? String, "16×16")
+
+        let mirror = app.buttons["mirrorButton"]
+        mirror.tap()
+        let undo = app.buttons["undoButton"]
+        XCTAssertTrue(undo.isEnabled)
+        app.buttons["regenerateButton"].tap()
+        let size = app.buttons["gridSizeOption_24"]
+        XCTAssertTrue(size.waitForExistence(timeout: 5))
+        size.tap()
+        let confirm = app.buttons["confirmRegenerateButton"].firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        confirm.tap()
+
+        XCTAssertTrue(app.staticTexts["正在重新生成图纸…"].waitForExistence(timeout: 5))
+        XCTAssertFalse(undo.isEnabled)
+        XCTAssertFalse(app.buttons["redoButton"].isEnabled)
+        XCTAssertFalse(mirror.isEnabled)
+        XCTAssertFalse(export.isEnabled)
+        XCTAssertFalse(app.buttons["regenerateButton"].isEnabled)
+        XCTAssertFalse(app.buttons["画笔"].isEnabled)
+        XCTAssertFalse(app.buttons["橡皮擦"].isEnabled)
+        XCTAssertFalse(app.buttons["吸管"].isEnabled)
+        XCTAssertFalse(app.buttons["patternColorButton"].firstMatch.isEnabled)
+        XCTAssertFalse(canvas.isEnabled)
+
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: export)
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 60), .completed)
+        XCTAssertEqual(canvas.value as? String, "24×24")
+        XCTAssertFalse(undo.isEnabled)
+        XCTAssertFalse(app.buttons["redoButton"].isEnabled)
+
+        // Exit and reopen twice, with a full debounce interval between reads. A late write
+        // containing the old grid would revert the dimensions on the second reopen.
+        let card = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'projectCard_'" )).firstMatch
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.tap()
+        XCTAssertTrue(export.waitForExistence(timeout: 5))
+        XCTAssertEqual(canvas.value as? String, "24×24")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        let debounce = XCTNSPredicateExpectation(predicate: NSPredicate(value: false), object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [debounce], timeout: 1), .timedOut)
+        card.tap()
+        XCTAssertTrue(export.waitForExistence(timeout: 5))
+        XCTAssertEqual(canvas.value as? String, "24×24")
+    }
+
     /// Drives the pattern editor's "regenerate at a different size" flow end to end: reach the
     /// editor via the normal new-project path, tap the regenerate button, pick a different grid
     /// size than the one just used, confirm the destructive confirmation dialog, and verify the
